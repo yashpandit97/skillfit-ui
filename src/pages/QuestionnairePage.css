@@ -1,0 +1,205 @@
+.questionnairePage {
+  width: 100%;
+  max-width: none;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Ensure button text is visible on dark background (outline variant) */
+.questionnairePage button {
+  color: var(--text);
+}
+.questionnairePage button:hover {
+  color: #fff;
+}
+.questionnairePage button:disabled {
+  color: var(--text-muted);
+}
+
+.questionnaireTabs {
+  width: 100%;
+}
+
+.questionnaireTabs [data-part="root"] {
+  width: 100%;
+}
+
+.questionnaireError {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 2rem 1rem;
+}
+
+.loadingIcon {
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--accent);
+}
+
+/* Skeleton UI */
+.questionCardSkeleton {
+  pointer-events: none;
+}
+
+.questionCardSkeleton .questionActions {
+  margin-top: 0.75rem;
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-elevated) 0%,
+    var(--bg-card) 50%,
+    var(--bg-elevated) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.2s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+.skeletonCategory {
+  height: 10px;
+  width: 72px;
+  margin-bottom: 0.5rem;
+}
+
+.skeletonConcept {
+  height: 16px;
+  margin-bottom: 0.35rem;
+}
+
+.skeletonDescription {
+  height: 12px;
+  width: 85%;
+  margin-bottom: 1rem;
+}
+
+.skeletonBtn {
+  height: 36px;
+  width: 120px;
+}
+
+.skeletonSubmit {
+  height: 40px;
+  width: 180px;
+  border-radius: var(--radius);
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.questionList {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem;
+}
+
+.questionCard {
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  border-left: 4px solid var(--border);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-left-color 0.2s ease;
+  animation: fadeIn 0.35s ease forwards;
+}
+
+.questionCard:hover {
+  box-shadow: var(--shadow);
+}
+
+.questionCard.answeredYes {
+  border-left-color: var(--success);
+}
+
+.questionCard.answeredNo {
+  border-left-color: var(--danger);
+}
+
+.questionCategory {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 0.375rem;
+}
+
+.questionConcept {
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.questionDescription {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  line-height: 1.4;
+}
+
+.questionActions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btnYes.selected {
+  background: var(--success);
+  color: #0f172a;
+  border-color: var(--success);
+}
+
+.btnYes.selected:hover {
+  background: var(--success-hover);
+}
+
+.btnNo.selected {
+  background: var(--danger);
+  color: #0f172a;
+  border-color: var(--danger);
+}
+
+.btnNo.selected:hover {
+  background: var(--danger-hover);
+}
+
+.btnIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.questionnaireHint {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  margin-bottom: 1rem;
+}
+
+.formError {
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.submitBtn {
+  min-width: 180px;
+}
+
+.submitBtn:disabled {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

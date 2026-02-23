@@ -1,0 +1,155 @@
+.jobInputPage {
+  width: 100%;
+  max-width: none;
+  margin: 0 auto;
+}
+
+/* Skeleton shown while job input is processing (same as questionnaire skeleton) */
+.jobInputSkeletonList {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem;
+}
+
+.jobInputPage .questionCardSkeleton {
+  pointer-events: none;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  border-left: 4px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+}
+
+/* Streamed question card (filled in as questions arrive) */
+.jobInputPage .questionCardStreamed {
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.jobInputPage .questionCardStreamed .questionCategory {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.jobInputPage .questionCardStreamed .questionConcept {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.35rem;
+}
+
+.jobInputPage .questionCardStreamed .questionDescription {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.jobInputPage .questionActionsPlaceholder .streamedLabel {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.jobInputPage .questionCardSkeleton .questionActions {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.jobInputPage .skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-elevated) 0%,
+    var(--bg-card) 50%,
+    var(--bg-elevated) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.2s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+.jobInputPage .skeletonCategory {
+  height: 10px;
+  width: 72px;
+  margin-bottom: 0.5rem;
+}
+
+.jobInputPage .skeletonConcept {
+  height: 16px;
+  margin-bottom: 0.35rem;
+}
+
+.jobInputPage .skeletonDescription {
+  height: 12px;
+  width: 85%;
+  margin-bottom: 1rem;
+}
+
+.jobInputPage .skeletonBtn {
+  height: 36px;
+  width: 120px;
+}
+
+.jobInputPage .skeletonSubmit {
+  height: 40px;
+  width: 180px;
+  border-radius: var(--radius);
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.jobInputForm {
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+}
+
+.jobInputForm:hover {
+  box-shadow: var(--shadow-lg);
+}
+
+.jobInputForm .formGroup {
+  margin-bottom: 1.25rem;
+}
+
+.jobInputForm label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.375rem;
+  color: var(--text);
+}
+
+.inputIcon {
+  width: 1rem;
+  height: 1rem;
+  color: var(--text-muted);
+}
+
+.inputTextarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.formError {
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.submitBtn {
+  margin-top: 0.25rem;
+}
+
+.btnIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+}

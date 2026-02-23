@@ -1,0 +1,37 @@
+.downloadCard {
+  padding: 2rem;
+  max-width: 400px;
+  box-shadow: var(--shadow);
+}
+
+.downloadCard:hover {
+  box-shadow: var(--shadow-lg);
+}
+
+.downloadError {
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.downloadBtn {
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.btnIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.downloadBack {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+}
+
+.downloadBack:hover {
+  color: var(--accent);
+}

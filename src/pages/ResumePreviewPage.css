@@ -1,0 +1,73 @@
+.resumeLoading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  color: var(--text-muted);
+}
+
+.resumeLoading .loadingIcon {
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--accent);
+}
+
+.resumeActions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.btnIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.resumeContent {
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+}
+
+.resumeContent:hover {
+  box-shadow: var(--shadow-lg);
+}
+
+.resumeSection {
+  margin-bottom: 1.25rem;
+}
+
+.resumeSection:last-child {
+  margin-bottom: 0;
+}
+
+.resumeHeading {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+
+.resumeSummary {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.resumeBullets {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.resumeBullets li {
+  margin-bottom: 0.35rem;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+
+.deficient {
+  color: var(--danger);
+  font-weight: 500;
+}
