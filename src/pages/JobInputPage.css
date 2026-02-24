@@ -4,6 +4,73 @@
   margin: 0 auto;
 }
 
+.jobInputPageChat {
+  padding-bottom: 2rem;
+}
+
+/* Single column flow: JD form → progress → questions → Continue */
+.jobInputPageFlow {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 2rem;
+}
+
+.jobInputPageFlow .jobInputForm {
+  margin-bottom: 0;
+}
+
+.jobInputPageFlow .progressBarWrap {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.jobInputPageFlow .jobInputQuestionsSection {
+  margin-top: 0;
+}
+
+.jobInputQuestionsSection {
+  margin-top: 2rem;
+  scroll-margin-top: 1rem;
+}
+
+.questionsSectionTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 1rem;
+}
+
+/* LLM generation progress bar */
+.progressBarWrap {
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.progressBarTrack {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progressBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover, #5b8def));
+  border-radius: 4px;
+  transition: width 0.2s ease-out;
+}
+
+.progressBarLabel {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  min-width: 2.5rem;
+  text-align: right;
+}
+
 /* Skeleton shown while job input is processing (same as questionnaire skeleton) */
 .jobInputSkeletonList {
   list-style: none;

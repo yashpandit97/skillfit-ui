@@ -117,9 +117,29 @@
 }
 
 .gapDetail li {
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
   font-size: 0.9375rem;
   line-height: 1.4;
+}
+
+.gapStudyLinks {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-left: 0.5rem;
+}
+
+.gapStudyLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.gapStudyLink:hover {
+  text-decoration: underline;
 }
 
 .gapActions {

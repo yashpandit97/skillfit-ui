@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { HiChartBar, HiExclamation, HiLightBulb, HiShieldExclamation, HiDocumentText, HiDownload } from 'react-icons/hi'
+import { HiChartBar, HiExclamation, HiLightBulb, HiShieldExclamation, HiDocumentText, HiDownload, HiExternalLink } from 'react-icons/hi'
 import { Link } from 'react-router-dom'
-import { gapApi } from '../api/client'
+import { gapApi, normalizeGapItem } from '../api/client'
 import type { SkillGapDashboardItem } from '../api/client'
 import './SkillGapDashboardPage.css'
 
@@ -48,11 +48,57 @@ export function SkillGapDashboardPage() {
               <div className="gapDetails">
                 <details className="gapDetail">
                   <summary><HiExclamation className="detailIcon" aria-hidden /> Weaknesses</summary>
-                  <ul>{item.weaknesses.map((w, i) => <li key={i}>{w}</li>)}</ul>
+                  <ul>
+                    {(item.weaknesses ?? []).map((w, i) => {
+                      const n = normalizeGapItem(w)
+                      return (
+                        <li key={i}>
+                          {n.text}
+                          {(n.study_urls?.websites?.length ?? 0) + (n.study_urls?.youtube?.length ?? 0) > 0 && (
+                            <span className="gapStudyLinks">
+                              {n.study_urls?.websites?.map((url, j) => (
+                                <a key={`w-${j}`} href={url} target="_blank" rel="noopener noreferrer" className="gapStudyLink">
+                                  <HiExternalLink aria-hidden /> Article
+                                </a>
+                              ))}
+                              {n.study_urls?.youtube?.map((url, j) => (
+                                <a key={`yt-${j}`} href={url} target="_blank" rel="noopener noreferrer" className="gapStudyLink">
+                                  <HiExternalLink aria-hidden /> Video
+                                </a>
+                              ))}
+                            </span>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
                 </details>
                 <details className="gapDetail">
                   <summary><HiLightBulb className="detailIcon" aria-hidden /> Improvement suggestions</summary>
-                  <ul>{item.improvement_suggestions.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                  <ul>
+                    {(item.improvement_suggestions ?? []).map((s, i) => {
+                      const n = normalizeGapItem(s)
+                      return (
+                        <li key={i}>
+                          {n.text}
+                          {(n.study_urls?.websites?.length ?? 0) + (n.study_urls?.youtube?.length ?? 0) > 0 && (
+                            <span className="gapStudyLinks">
+                              {n.study_urls?.websites?.map((url, j) => (
+                                <a key={`w-${j}`} href={url} target="_blank" rel="noopener noreferrer" className="gapStudyLink">
+                                  <HiExternalLink aria-hidden /> Article
+                                </a>
+                              ))}
+                              {n.study_urls?.youtube?.map((url, j) => (
+                                <a key={`yt-${j}`} href={url} target="_blank" rel="noopener noreferrer" className="gapStudyLink">
+                                  <HiExternalLink aria-hidden /> Video
+                                </a>
+                              ))}
+                            </span>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
                 </details>
                 {item.resume_risk_claims.length > 0 && (
                   <details className="gapDetail">

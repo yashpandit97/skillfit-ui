@@ -5,6 +5,58 @@
   margin-right: auto;
 }
 
+/* Thread layout: scrollable conversation with stages */
+.questionnairePageThread {
+  min-height: 0;
+}
+
+.questionnaireThread {
+  min-height: 0;
+  scroll-behavior: smooth;
+}
+
+.threadStageBlock {
+  scroll-margin-bottom: 1rem;
+}
+
+.threadProgressBlock {
+  scroll-margin-bottom: 0.5rem;
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Same progress bar as Job Input (first occurrence) – keep UI uniform */
+.questionnairePage .progressBarWrap {
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.questionnairePage .progressBarTrack {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-elevated, #374151);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.questionnairePage .progressBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent, #3b82f6), #5b8def);
+  border-radius: 4px;
+  transition: width 0.2s ease-out;
+}
+
+.questionnairePage .progressBarLabel {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-muted, #9ca3af);
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+
 /* Ensure button text is visible on dark background (outline variant) */
 .questionnairePage button {
   color: var(--text);

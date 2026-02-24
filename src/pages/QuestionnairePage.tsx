@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -29,6 +29,17 @@ function getQuestionsForStage(stageNum: number, questions: QuestionnaireItem[]):
   return questions.slice(start, end)
 }
 
+/** Unique stage numbers in order from questions. */
+function getStageNumbers(questions: QuestionnaireItem[]): number[] {
+  const hasStage = questions.some((q) => q.stage != null)
+  if (hasStage) {
+    const stages = [...new Set(questions.map((q) => q.stage).filter((s): s is number => s != null))]
+    return stages.sort((a, b) => a - b)
+  }
+  const n = Math.ceil(questions.length / QUESTIONS_PER_STAGE_LEGACY) || 1
+  return Array.from({ length: n }, (_, i) => i + 1)
+}
+
 export function QuestionnairePage() {
   const { jobId } = useParams<{ jobId: string }>()
   const id = Number(jobId)
@@ -36,6 +47,11 @@ export function QuestionnairePage() {
   const queryClient = useQueryClient()
   const [answers, setAnswers] = useState<Record<string, Answer>>({})
   const [questionnaireDone, setQuestionnaireDone] = useState(false)
+  const [stageProgressPct, setStageProgressPct] = useState(0)
+  const [submitProgressPct, setSubmitProgressPct] = useState(0)
+  const threadRef = useRef<HTMLDivElement>(null)
+  const progressRef = useRef<HTMLDivElement>(null)
+  const prevQuestionCountRef = useRef(0)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['questionnaire', id],
@@ -62,38 +78,81 @@ export function QuestionnairePage() {
     questions.every((q) => answers[q.id] === 'yes' || answers[q.id] === 'no')
 
   const submitStage = useMutation({
-    mutationFn: () =>
-      jobApi.submitStageAnswers(id, {
-        stage: current_stage,
-        answers: Object.fromEntries(
-          currentStageQuestions.map((q) => [
-            q.id,
-            answers[q.id] === 'yes' || answers[q.id] === 'no' ? answers[q.id]! : 'no',
-          ])
-        ) as Record<string, string>,
-      }),
+    mutationFn: async () => {
+      setStageProgressPct(0)
+      const res = await jobApi.submitStageAnswersStream(
+        id,
+        {
+          stage: current_stage,
+          answers: Object.fromEntries(
+            currentStageQuestions.map((q) => [
+              q.id,
+              answers[q.id] === 'yes' || answers[q.id] === 'no' ? answers[q.id]! : 'no',
+            ])
+          ) as Record<string, string>,
+        },
+        { onProgress: (pct) => setStageProgressPct(pct) }
+      )
+      return { data: res }
+    },
     onSuccess: (res) => {
-      if (isQuestionnaireDone(res)) setQuestionnaireDone(true)
+      if (res?.data && res.data.done) setQuestionnaireDone(true)
+      setStageProgressPct(0)
       queryClient.invalidateQueries({ queryKey: ['questionnaire', id] })
     },
-    onError: () => {},
+    onError: () => {
+      setStageProgressPct(0)
+    },
   })
 
+  const stageNumbers = getStageNumbers(questions)
+  useEffect(() => {
+    if (questions.length > prevQuestionCountRef.current && threadRef.current) {
+      prevQuestionCountRef.current = questions.length
+      threadRef.current.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })
+    } else {
+      prevQuestionCountRef.current = questions.length
+    }
+  }, [questions.length])
+
+  useEffect(() => {
+    if (submitStage.isPending && progressRef.current) {
+      progressRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [submitStage.isPending])
+
+  const submitFinalRef = useRef<HTMLDivElement>(null)
   const submitFinal = useMutation({
-    mutationFn: () =>
-      questionnaireApi.submit(id, {
-        answers: Object.fromEntries(
-          questions.map((q) => [
-            q.id,
-            answers[q.id] === 'yes' || answers[q.id] === 'no' ? answers[q.id]! : 'no',
-          ])
-        ) as Record<string, string>,
-      }),
+    mutationFn: async () => {
+      setSubmitProgressPct(0)
+      const res = await questionnaireApi.submitStream(
+        id,
+        {
+          answers: Object.fromEntries(
+            questions.map((q) => [
+              q.id,
+              answers[q.id] === 'yes' || answers[q.id] === 'no' ? answers[q.id]! : 'no',
+            ])
+          ) as Record<string, string>,
+        },
+        { onProgress: (pct) => setSubmitProgressPct(pct) }
+      )
+      return res
+    },
     onSuccess: () => {
+      setSubmitProgressPct(0)
       navigate(`/resume/${id}`)
     },
-    onError: () => {},
+    onError: () => {
+      setSubmitProgressPct(0)
+    },
   })
+
+  useEffect(() => {
+    if (submitFinal.isPending && submitFinalRef.current) {
+      submitFinalRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [submitFinal.isPending])
 
   const setAnswer = (qid: string, value: 'yes' | 'no') => {
     setAnswers((a) => ({ ...a, [qid]: value }))
@@ -148,83 +207,62 @@ export function QuestionnairePage() {
   const submitError = submitStage.isError ? submitStage.error : submitFinal.isError ? submitFinal.error : null
 
   return (
-    <Box className="questionnairePage animateFadeIn" width="100%" mx="auto" p={6} boxSizing="border-box">
+    <Box className="questionnairePage questionnairePageThread animateFadeIn" width="100%" mx="auto" p={6} boxSizing="border-box" height="100%" display="flex" flexDirection="column">
       <Heading size="lg" mb={2}>Concept checklist</Heading>
-      <Text color="gray.500" mb={6}>
-        For each concept, choose <strong>Yes</strong> if you’re confident and can demonstrate it, or <strong>No</strong> if you need to prepare.
+      <Text color="gray.500" mb={4}>
+        For each concept, choose <strong>Yes</strong> if you're confident and can demonstrate it, or <strong>No</strong> if you need to prepare. Answer each set and click Continue to get the next set.
       </Text>
 
-      <form
-                  onSubmit={allStagesComplete ? handleFinalSubmit : handleStageContinue}
-                  style={{ opacity: isPending ? 0.7 : 1, pointerEvents: isPending ? 'none' : 'auto', width: '100%' }}
-                >
-                  <VStack listStyle="none" p={0} m={0} align="stretch" gap={4} as="ul" width="100%" sx={{ listStyle: 'none' }}>
-                    {currentStageQuestions.map((q) => (
-                      <Box
-                        key={q.id}
-                        as="li"
-                        p={5}
-                        borderRadius="lg"
-                        bg="gray.800"
-                        borderLeftWidth="4px"
-                        borderLeftColor={
-                          answers[q.id] === 'yes'
-                            ? 'green.500'
-                            : answers[q.id] === 'no'
-                              ? 'orange.500'
-                              : 'gray.600'
-                        }
-                      >
-                        <Text fontSize="xs" textTransform="uppercase" letterSpacing="wider" color="gray.400" mb={1}>
-                          {q.category.replace(/_/g, ' ')}
-                        </Text>
-                        <Text fontWeight="600" mb={2}>{q.concept}</Text>
-                        {q.description && (
-                          <Text fontSize="sm" color="gray.400" mb={4}>{q.description}</Text>
-                        )}
-                        <Flex gap={2} flexWrap="wrap">
-                          <Button
-                            size="sm"
-                            variant={answers[q.id] === 'yes' ? 'solid' : 'outline'}
-                            colorPalette={answers[q.id] === 'yes' ? 'green' : 'gray'}
-                            color={answers[q.id] === 'yes' ? undefined : 'gray.200'}
-                            borderColor={answers[q.id] === 'yes' ? undefined : 'gray.500'}
-                            onClick={() => setAnswer(q.id, 'yes')}
-                          >
-                            <HiCheck style={{ marginRight: 6 }} /> Yes — I’m aware
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant={answers[q.id] === 'no' ? 'solid' : 'outline'}
-                            colorPalette={answers[q.id] === 'no' ? 'orange' : 'gray'}
-                            color={answers[q.id] === 'no' ? undefined : 'gray.200'}
-                            borderColor={answers[q.id] === 'no' ? undefined : 'gray.500'}
-                            onClick={() => setAnswer(q.id, 'no')}
-                          >
-                            <HiX style={{ marginRight: 6 }} /> No — I need to prepare
-                          </Button>
-                        </Flex>
-                      </Box>
-                    ))}
-                  </VStack>
+      <Box ref={threadRef} className="questionnaireThread" flex="1" overflowY="auto" overflowX="hidden" minH="0" pr={2}>
+        {stageNumbers.map((stageNum) => {
+          const stageQuestions = getQuestionsForStage(stageNum, questions)
+          if (stageQuestions.length === 0) return null
+          const isCurrentStage = stageNum === current_stage
+          const showButton = isCurrentStage
+          return (
+            <Box key={stageNum} className="threadStageBlock">
+              {/* Questions – one below the other */}
+              <Text fontSize="xs" fontWeight="600" color="gray.400" textTransform="uppercase" letterSpacing="wider" mb={3} mt={6}>
+                {stageNum === 1 ? 'First set' : `Set ${stageNum}`}
+              </Text>
+              <VStack listStyle="none" p={0} m={0} align="stretch" gap={4} as="ul" width="100%" sx={{ listStyle: 'none' }}>
+                {stageQuestions.map((q) => (
+                  <Box key={q.id} as="li" p={5} borderRadius="lg" bg="gray.800" borderLeftWidth="4px" borderLeftColor={answers[q.id] === 'yes' ? 'green.500' : answers[q.id] === 'no' ? 'orange.500' : 'gray.600'}>
+                    <Text fontSize="xs" textTransform="uppercase" letterSpacing="wider" color="gray.400" mb={1}>{q.category.replace(/_/g, ' ')}</Text>
+                    <Text fontWeight="600" mb={2}>{q.concept}</Text>
+                    {q.description && <Text fontSize="sm" color="gray.400" mb={4}>{q.description}</Text>}
+                    {isCurrentStage ? (
+                      <Flex gap={2} flexWrap="wrap">
+                        <Button size="sm" variant={answers[q.id] === 'yes' ? 'solid' : 'outline'} colorPalette={answers[q.id] === 'yes' ? 'green' : 'gray'} color={answers[q.id] === 'yes' ? undefined : 'gray.200'} borderColor={answers[q.id] === 'yes' ? undefined : 'gray.500'} onClick={() => setAnswer(q.id, 'yes')}><HiCheck style={{ marginRight: 6 }} /> Yes — I'm aware</Button>
+                        <Button size="sm" variant={answers[q.id] === 'no' ? 'solid' : 'outline'} colorPalette={answers[q.id] === 'no' ? 'orange' : 'gray'} color={answers[q.id] === 'no' ? undefined : 'gray.200'} borderColor={answers[q.id] === 'no' ? undefined : 'gray.500'} onClick={() => setAnswer(q.id, 'no')}><HiX style={{ marginRight: 6 }} /> No — I need to prepare</Button>
+                      </Flex>
+                    ) : (
+                      <Text fontSize="sm" color="gray.500">You answered: <strong>{answers[q.id] === 'yes' ? 'Yes' : answers[q.id] === 'no' ? 'No' : '—'}</strong></Text>
+                    )}
+                  </Box>
+                ))}
+              </VStack>
+
+              {/* Button – directly below this set of questions */}
+              {showButton && (
+                <form onSubmit={allStagesComplete ? handleFinalSubmit : handleStageContinue} style={{ opacity: isPending ? 0.7 : 1, pointerEvents: isPending ? 'none' : 'auto', width: '100%', marginTop: 24 }}>
                   {!allAnsweredForStage && !allStagesComplete && (
-                    <Text fontSize="sm" color="gray.400" mt={4}>
+                    <Text fontSize="sm" color="gray.400" mb={2}>
                       Answer every concept above (Yes or No) to continue.
                     </Text>
                   )}
                   {allStagesComplete && !allAnsweredForFinal && (
-                    <Text fontSize="sm" color="gray.400" mt={4}>
+                    <Text fontSize="sm" color="gray.400" mb={2}>
                       Answer every concept above to submit and generate your resume.
                     </Text>
                   )}
                   {submitError && (
-                    <Text color="red.400" fontSize="sm" mt={4}>
-                      {(submitError as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Request failed'}
+                    <Text color="red.400" fontSize="sm" mb={2}>
+                      {(submitError as Error)?.message ?? (submitError as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Request failed'}
                     </Text>
                   )}
                   <Button
                     type="submit"
-                    mt={6}
                     colorPalette="blue"
                     disabled={isPending || (allStagesComplete ? !allAnsweredForFinal : !allAnsweredForStage)}
                   >
@@ -238,6 +276,36 @@ export function QuestionnairePage() {
                     <HiArrowRight style={{ marginLeft: 8 }} />
                   </Button>
                 </form>
+              )}
+
+              {/* Progress bar – directly below "Submit & generate resume" when clicked */}
+              {showButton && allStagesComplete && (submitFinal.isPending || submitProgressPct > 0) && (
+                <div ref={submitFinalRef} className="threadProgressBlock" role="progressbar" aria-valuenow={submitProgressPct} aria-valuemin={0} aria-valuemax={100} aria-label="Generating resume">
+                  <div className="progressBarWrap">
+                    <div className="progressBarTrack">
+                      <div className="progressBarFill" style={{ width: `${submitProgressPct}%` }} />
+                    </div>
+                    <span className="progressBarLabel">{submitProgressPct}%</span>
+                  </div>
+                  <Text fontSize="sm" color="gray.500" mt={2}>Generating your resume…</Text>
+                </div>
+              )}
+
+              {/* Progress bar – directly below the button when loading next set (same UI as first occurrence) */}
+              {submitStage.isPending && !allStagesComplete && current_stage === stageNum && (
+                <div ref={progressRef} className="threadProgressBlock" role="progressbar" aria-valuenow={stageProgressPct} aria-valuemin={0} aria-valuemax={100} aria-label="Generating next questions">
+                  <div className="progressBarWrap">
+                    <div className="progressBarTrack">
+                      <div className="progressBarFill" style={{ width: `${stageProgressPct}%` }} />
+                    </div>
+                    <span className="progressBarLabel">{stageProgressPct}%</span>
+                  </div>
+                </div>
+              )}
+            </Box>
+          )
+        })}
+      </Box>
     
     </Box>
   )
