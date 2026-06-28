@@ -1,10 +1,14 @@
 import axios from 'axios'
-import { API_BASE, apiUrl, getWsBaseUrl } from '../lib/apiBase'
+import { getApiBase, apiUrl, getWsBaseUrl } from '../lib/apiBase'
 
 const api = axios.create({
-  baseURL: API_BASE,
+  baseURL: getApiBase(),
   headers: { 'Content-Type': 'application/json' },
 })
+
+export function syncApiClientBaseUrl(): void {
+  api.defaults.baseURL = getApiBase()
+}
 
 function getAuthToken(): string | null {
   try {

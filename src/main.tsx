@@ -6,6 +6,8 @@ import App from './App'
 import { system } from './theme'
 import { ThemeSync } from './components/ThemeSync'
 import { Toaster } from './components/ui/toaster'
+import { loadApiConfig } from './lib/apiBase'
+import { syncApiClientBaseUrl } from './api/client'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -14,14 +16,21 @@ const queryClient = new QueryClient({
   },
 })
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ChakraProvider value={system}>
-      <QueryClientProvider client={queryClient}>
-        <ThemeSync />
-        <App />
-        <Toaster />
-      </QueryClientProvider>
-    </ChakraProvider>
-  </React.StrictMode>,
-)
+async function bootstrap() {
+  await loadApiConfig()
+  syncApiClientBaseUrl()
+
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <ChakraProvider value={system}>
+        <QueryClientProvider client={queryClient}>
+          <ThemeSync />
+          <App />
+          <Toaster />
+        </QueryClientProvider>
+      </ChakraProvider>
+    </React.StrictMode>,
+  )
+}
+
+bootstrap()

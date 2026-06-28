@@ -3,26 +3,20 @@ import { existsSync, rmSync, writeFileSync } from 'node:fs'
 const wranglerJsonc = `{
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "skillfit-ui",
-  "main": "./worker/index.js",
   "compatibility_date": "2026-06-29",
   "assets": {
     "directory": "./dist",
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api", "/api/*", "/health"]
+    "not_found_handling": "single-page-application"
   }
 }
 `
 
 const wranglerToml = `name = "skillfit-ui"
-main = "./worker/index.js"
 compatibility_date = "2026-06-29"
 
 [assets]
 directory = "./dist"
-binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = [ "/api", "/api/*", "/health" ]
 `
 
 writeFileSync('wrangler.jsonc', wranglerJsonc)
