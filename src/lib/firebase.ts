@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
+import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? 'AIzaSyBn94u9sXhgbVuLp8pXlkcl5fDiqxJKQ0w',
@@ -17,7 +17,11 @@ export const firebaseAuth = getAuth(firebaseApp)
 const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
 
+/** Redirect flow avoids Cross-Origin-Opener-Policy issues with signInWithPopup on static hosts. */
 export async function signInWithGoogle() {
-  const result = await signInWithPopup(firebaseAuth, googleProvider)
-  return result.user
+  await signInWithRedirect(firebaseAuth, googleProvider)
+}
+
+export function completeGoogleRedirect() {
+  return getRedirectResult(firebaseAuth)
 }

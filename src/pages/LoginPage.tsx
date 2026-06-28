@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Flex, Heading, Text, Link as ChakraLink, Box } from '@chakra-ui/react'
 import { HiLockClosed, HiMail, HiLogin } from 'react-icons/hi'
 import { FcGoogle } from 'react-icons/fc'
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth'
 import { authApi } from '../api/client'
-import { firebaseAuth, signInWithGoogle } from '../lib/firebase'
+import { firebaseAuth, signInWithGoogle, completeGoogleRedirect } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -28,6 +28,29 @@ export function LoginPage() {
     const { data } = await authApi.firebaseLogin(idToken)
     setToken(data.access_token)
   }
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const result = await completeGoogleRedirect()
+        if (!result?.user || cancelled) return
+        setLoading(true)
+        await exchangeFirebaseToken()
+        toaster.create({ title: 'Welcome back', type: 'success' })
+        navigate('/job')
+      } catch (err: unknown) {
+        if (cancelled) return
+        const apiDetail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        setError(apiDetail || (err instanceof Error ? err.message : 'Google sign-in failed'))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -79,15 +102,9 @@ export function LoginPage() {
     setLoading(true)
     try {
       await signInWithGoogle()
-      await exchangeFirebaseToken()
-      toaster.create({ title: 'Welcome back', type: 'success' })
-      navigate('/job')
     } catch (err: unknown) {
-      const fbCode = (err as { code?: string })?.code
-      if (fbCode === 'auth/popup-closed-by-user') return
       const apiDetail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(apiDetail || (fbCode === 'auth/popup-blocked' ? 'Allow popups for this site to sign in with Google' : 'Google sign-in failed'))
-    } finally {
+      setError(apiDetail || (err instanceof Error ? err.message : 'Google sign-in failed'))
       setLoading(false)
     }
   }

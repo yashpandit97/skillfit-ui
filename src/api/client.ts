@@ -1,7 +1,8 @@
 import axios from 'axios'
+import { API_BASE, apiUrl, getWsBaseUrl } from '../lib/apiBase'
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -151,12 +152,6 @@ export interface ResumePreviewResponse {
   docx_path: string | null
 }
 
-/** WebSocket base URL (same origin, so proxy works). */
-function getWsBaseUrl(): string {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/api`
-}
-
 export interface JobSubmissionListItem {
   id: number
   job_title?: string | null
@@ -269,7 +264,7 @@ export const jobApi = {
     const onProgress = typeof callbacks === 'object' ? callbacks?.onProgress : undefined
     const onQuestion = typeof callbacks === 'function' ? callbacks : (typeof callbacks === 'object' ? callbacks?.onQuestion : undefined)
     const token = getAuthToken()
-    const res = await fetch('/api/job/input/stream', {
+    const res = await fetch(apiUrl('/job/input/stream'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify(data),
@@ -321,7 +316,7 @@ export const jobApi = {
   ): Promise<number> {
     const onProgress = callbacks?.onProgress
     const token = getAuthToken()
-    const res = await fetch('/api/job/input/fit-report/stream', {
+    const res = await fetch(apiUrl('/job/input/fit-report/stream'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify(data),
@@ -437,7 +432,7 @@ export const jobApi = {
   ): Promise<StageAnswersResponse> {
     const token = getAuthToken()
     if (!token) throw new Error('Not authenticated')
-    const res = await fetch(`/api/job/${jobId}/questionnaire/stage-answers/stream`, {
+    const res = await fetch(apiUrl(`/job/${jobId}/questionnaire/stage-answers/stream`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(data),
@@ -505,7 +500,7 @@ export const questionnaireApi = {
   ): Promise<EvaluationResultResponse> {
     const token = getAuthToken()
     if (!token) throw new Error('Not authenticated')
-    const res = await fetch(`/api/questionnaire/${jobId}/submit/stream`, {
+    const res = await fetch(apiUrl(`/questionnaire/${jobId}/submit/stream`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(data),
@@ -576,7 +571,7 @@ export const gapApi = {
   list: () => api.get<{ items: SkillGapDashboardItem[] }>('/gap/'),
   get: (jobId: number) => api.get<SkillGapDashboardItem>(`/gap/${jobId}`),
   skillGraph: (jobId: number) => api.get<SkillGraphResponse>(`/gap/${jobId}/skill-graph`),
-  exportUrl: (jobId: number, format: 'md' | 'pdf') => `/api/gap/${jobId}/export?format=${format}`,
+  exportUrl: (jobId: number, format: 'md' | 'pdf') => apiUrl(`/gap/${jobId}/export?format=${format}`),
   exportBlob: async (jobId: number, format: 'md' | 'pdf'): Promise<Blob> => {
     const { data } = await api.get(`/gap/${jobId}/export`, { params: { format }, responseType: 'blob' })
     return data as Blob
@@ -616,8 +611,8 @@ export const resumeApi = {
     api.post<{ share_url: string; expires_at: string }>('/resume/share', { job_submission_id: jobSubmissionId }),
   tailoredSummary: (jobId: number) =>
     api.post<{ one_liner: string }>('/resume/tailored-summary', { job_submission_id: jobId }),
-  downloadUrl: (jobId: number) => `/api/resume/download/${jobId}`,
-  downloadPdfUrl: (jobId: number) => `/api/resume/download/${jobId}/pdf`,
+  downloadUrl: (jobId: number) => apiUrl(`/resume/download/${jobId}`),
+  downloadPdfUrl: (jobId: number) => apiUrl(`/resume/download/${jobId}/pdf`),
   downloadBlob: async (jobId: number): Promise<Blob> => {
     const { data } = await api.get(`/resume/download/${jobId}`, { responseType: 'blob' })
     return data as Blob
@@ -638,7 +633,7 @@ export const profileApi = {
     const form = new FormData()
     form.append('file', file)
     const token = getAuthToken()
-    const res = await fetch('/api/profile/resume', {
+    const res = await fetch(apiUrl('/profile/resume'), {
       method: 'PUT',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
