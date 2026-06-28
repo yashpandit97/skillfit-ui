@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 .yarn/install-state.gz
+.wrangler/
 
 # Build output
 dist/

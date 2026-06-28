@@ -6,9 +6,9 @@
   "packageManager": "yarn@4.5.0",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/prepare-cloudflare-deploy.mjs",
     "preview": "vite preview",
-    "deploy": "wrangler deploy --config wrangler.jsonc"
+    "deploy": "wrangler deploy --config wrangler.jsonc --no-autoconfig"
   },
   "dependencies": {
     "@chakra-ui/react": "^3.33.0",
