@@ -1,8 +1,13 @@
 import { useParams, Link } from 'react-router-dom'
 import { useState } from 'react'
+import { Box } from '@chakra-ui/react'
 import { HiDownload, HiDocumentText } from 'react-icons/hi'
 import { resumeApi } from '../api/client'
-import './DownloadPage.css'
+import { PageHeader } from '../components/ui/PageHeader'
+import { Card } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Alert } from '../components/ui/Alert'
+import { toaster } from '../lib/toaster'
 
 export function DownloadPage() {
   const { jobId } = useParams<{ jobId: string }>()
@@ -21,32 +26,39 @@ export function DownloadPage() {
       a.download = `resume_${id}.docx`
       a.click()
       URL.revokeObjectURL(url)
+      toaster.create({ title: 'Resume downloaded', type: 'success' })
     } catch {
       setError('Download failed. Resume may not be ready.')
+      toaster.create({ title: 'Download failed', type: 'error' })
     } finally {
       setLoading(false)
     }
   }
 
+  if (!Number.isFinite(id)) {
+    return <Alert status="error">Invalid job ID</Alert>
+  }
+
   return (
-    <div className="downloadPage animateFadeIn">
-      <h1 className="pageTitle">Download resume</h1>
-      <p className="pageSubtitle">Get your ATS-friendly resume as a Word document (.docx).</p>
-      <div className="downloadCard card">
-        {error && <p className="error downloadError">{error}</p>}
-        <button
-          onClick={handleDownload}
-          disabled={loading}
-          className="btn btnPrimary downloadBtn"
-        >
-          <HiDownload className="btnIcon" aria-hidden />
-          {loading ? 'Preparing...' : 'Download .docx'}
-        </button>
-        <Link to={`/resume/${id}`} className="downloadBack">
-          <HiDocumentText className="btnIcon" aria-hidden />
-          Back to preview
-        </Link>
-      </div>
-    </div>
+    <Box maxW="480px" mx="auto">
+      <PageHeader
+        title="Download resume"
+        subtitle="Get your ATS-friendly resume as a Word document (.docx)."
+        breadcrumbs={[{ label: 'Resume', to: `/resume/${id}` }, { label: 'Download' }]}
+      />
+      <Card textAlign="center">
+        {error && <Alert status="error">{error}</Alert>}
+        <Button onClick={handleDownload} loading={loading} size="lg" icon={<HiDownload aria-hidden />}>
+          {loading ? 'Preparing…' : 'Download .docx'}
+        </Button>
+        <Box mt={4}>
+          <Link to={`/resume/${id}`}>
+            <Button variant="ghost" icon={<HiDocumentText aria-hidden />}>
+              Back to preview
+            </Button>
+          </Link>
+        </Box>
+      </Card>
+    </Box>
   )
 }

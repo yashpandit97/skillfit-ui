@@ -1,80 +1,173 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { HiLockClosed, HiUser, HiLogin } from 'react-icons/hi'
+import { useNavigate } from 'react-router-dom'
+import { Flex, Heading, Text, Link as ChakraLink, Box } from '@chakra-ui/react'
+import { HiLockClosed, HiMail, HiLogin } from 'react-icons/hi'
+import { FcGoogle } from 'react-icons/fc'
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth'
 import { authApi } from '../api/client'
+import { firebaseAuth, signInWithGoogle } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
-import './LoginPage.css'
+import { Card } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { FormField, FormInput } from '../components/ui/FormField'
+import { Alert } from '../components/ui/Alert'
+import { toaster } from '../lib/toaster'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const setToken = useAuthStore((s) => s.setToken)
   const navigate = useNavigate()
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const exchangeFirebaseToken = async () => {
+    const idToken = await firebaseAuth.currentUser?.getIdToken(true)
+    if (!idToken) throw new Error('Could not get Firebase session')
+    const { data } = await authApi.firebaseLogin(idToken)
+    setToken(data.access_token)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
+    if (!email.trim() || !password) {
+      setError('Email and password are required')
+      return
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters')
+      return
+    }
+    setLoading(true)
+    try {
+      if (mode === 'signup') {
+        await createUserWithEmailAndPassword(firebaseAuth, email.trim(), password)
+      } else {
+        await signInWithEmailAndPassword(firebaseAuth, email.trim(), password)
+      }
+      await exchangeFirebaseToken()
+      toaster.create({
+        title: mode === 'signup' ? 'Account created' : 'Welcome back',
+        type: 'success',
+      })
+      navigate('/job')
+    } catch (err: unknown) {
+      const fbCode = (err as { code?: string })?.code
+      const messages: Record<string, string> = {
+        'auth/invalid-credential': 'Invalid email or password',
+        'auth/user-not-found': 'No account found for this email',
+        'auth/wrong-password': 'Invalid email or password',
+        'auth/email-already-in-use': 'An account with this email already exists',
+        'auth/weak-password': 'Password is too weak',
+        'auth/invalid-email': 'Enter a valid email address',
+      }
+      const apiDetail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(
+        (fbCode && messages[fbCode]) ||
+          apiDetail ||
+          (err instanceof Error ? err.message : 'Authentication failed')
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGoogleSignIn = async () => {
     setError('')
     setLoading(true)
     try {
-      const { data } = await authApi.login(email, password)
-      setToken(data.access_token)
+      await signInWithGoogle()
+      await exchangeFirebaseToken()
+      toaster.create({ title: 'Welcome back', type: 'success' })
       navigate('/job')
     } catch (err: unknown) {
-      setError((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Login failed')
+      const fbCode = (err as { code?: string })?.code
+      if (fbCode === 'auth/popup-closed-by-user') return
+      const apiDetail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(apiDetail || (fbCode === 'auth/popup-blocked' ? 'Allow popups for this site to sign in with Google' : 'Google sign-in failed'))
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="loginWrap animateFadeIn">
-      <div className="loginCard card">
-        <h1 className="loginTitle">AI Resume Intelligence</h1>
-        <p className="loginSubtitle">Sign in to build your career diagnostic and ATS resume.</p>
-        <form onSubmit={handleLogin}>
-          <div className="formGroup">
-            <label htmlFor="email">
-              <HiUser className="inputIcon" aria-hidden />
-              Email or username
-            </label>
-            <input
+    <Flex minH="100vh" align="center" justify="center" p={6} className="login-mesh" bg="bg.canvas">
+      <Card maxW="400px" w="full" p={8}>
+        <Heading size="xl" mb={2} letterSpacing="-0.02em">
+          SkillFit
+        </Heading>
+        <Text color="fg.muted" fontSize="sm" mb={6}>
+          {mode === 'signin'
+            ? 'Sign in with your Firebase account to continue.'
+            : 'Create an account to get your fit report.'}
+        </Text>
+        {error && (
+          <Box mb={4}>
+            <Alert status="error">{error}</Alert>
+          </Box>
+        )}
+        <form onSubmit={handleSubmit}>
+          <FormField label={<><HiMail aria-hidden /> Email</>} id="email">
+            <FormInput
               id="email"
-              type="text"
-              autoComplete="username"
-              className="input"
+              type="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="e.g. admin or you@example.com"
+              placeholder="you@example.com"
             />
-          </div>
-          <div className="formGroup">
-            <label htmlFor="password">
-              <HiLockClosed className="inputIcon" aria-hidden />
-              Password
-            </label>
-            <input
+          </FormField>
+          <FormField label={<><HiLockClosed aria-hidden /> Password</>} id="password">
+            <FormInput
               id="password"
               type="password"
-              className="input"
-              autoComplete="current-password"
+              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
+              placeholder="At least 6 characters"
             />
-          </div>
-          {error && <p className="error loginError">{error}</p>}
-          <button type="submit" className="btn btnPrimary loginSubmit" disabled={loading}>
-            <HiLogin className="btnIcon" aria-hidden />
-            {loading ? 'Signing in...' : 'Sign in'}
-          </button>
+          </FormField>
+          <Button type="submit" w="full" loading={loading} icon={<HiLogin aria-hidden />} mb={4}>
+            {loading ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}
+          </Button>
         </form>
-        <p className="loginFooter">
-          <Link to="/job">Continue as guest</Link> — use API with token for full flow.
-        </p>
-      </div>
-    </div>
+        <Flex align="center" gap={3} my={4}>
+          <Box flex={1} h="1px" bg="border.subtle" />
+          <Text fontSize="xs" color="fg.muted">
+            or
+          </Text>
+          <Box flex={1} h="1px" bg="border.subtle" />
+        </Flex>
+        <Button
+          variant="outline"
+          w="full"
+          loading={loading}
+          onClick={handleGoogleSignIn}
+          icon={<FcGoogle aria-hidden />}
+          mb={4}
+        >
+          Sign in with Google
+        </Button>
+        <Text fontSize="sm" color="fg.muted" textAlign="center">
+            {mode === 'signin' ? (
+              <>
+                No account?{' '}
+                <ChakraLink color="accent.muted" onClick={() => { setMode('signup'); setError('') }}>
+                  Sign up
+                </ChakraLink>
+              </>
+            ) : (
+              <>
+                Already have an account?{' '}
+                <ChakraLink color="accent.muted" onClick={() => { setMode('signin'); setError('') }}>
+                  Sign in
+                </ChakraLink>
+              </>
+            )}
+          </Text>
+      </Card>
+    </Flex>
   )
 }

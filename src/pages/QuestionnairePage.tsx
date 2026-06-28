@@ -1,35 +1,29 @@
 import { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  Box,
-  Heading,
-  Text,
-  Button,
-  VStack,
-  Skeleton,
-  Flex,
-} from '@chakra-ui/react'
+import { Box, Flex, Text, VStack } from '@chakra-ui/react'
 import { HiCheck, HiX, HiArrowRight } from 'react-icons/hi'
-import { jobApi, questionnaireApi, type QuestionnaireItem, isQuestionnaireDone } from '../api/client'
-import './QuestionnairePage.css'
+import { jobApi, questionnaireApi, type QuestionnaireItem } from '../api/client'
+import { PageHeader } from '../components/ui/PageHeader'
+import { Card } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { ProgressBar } from '../components/ui/ProgressBar'
+import { Alert } from '../components/ui/Alert'
+import { Skeleton } from '../components/ui/Skeleton'
+import { AiBadge } from '../components/ui/AiBadge'
+import { toaster } from '../lib/toaster'
 
-type Answer = 'yes' | 'no' | null
+type Answer = 'yes' | 'no' | 'a_bit' | null
 
-/** Backend may use variable questions per stage; use question.stage when present, else fall back to fixed slice. */
 const QUESTIONS_PER_STAGE_LEGACY = 5
 
 function getQuestionsForStage(stageNum: number, questions: QuestionnaireItem[]): QuestionnaireItem[] {
   const hasStage = questions.some((q) => q.stage != null)
-  if (hasStage) {
-    return questions.filter((q) => q.stage === stageNum)
-  }
+  if (hasStage) return questions.filter((q) => q.stage === stageNum)
   const start = (stageNum - 1) * QUESTIONS_PER_STAGE_LEGACY
-  const end = stageNum * QUESTIONS_PER_STAGE_LEGACY
-  return questions.slice(start, end)
+  return questions.slice(start, stageNum * QUESTIONS_PER_STAGE_LEGACY)
 }
 
-/** Unique stage numbers in order from questions. */
 function getStageNumbers(questions: QuestionnaireItem[]): number[] {
   const hasStage = questions.some((q) => q.stage != null)
   if (hasStage) {
@@ -40,42 +34,60 @@ function getStageNumbers(questions: QuestionnaireItem[]): number[] {
   return Array.from({ length: n }, (_, i) => i + 1)
 }
 
+function answerBorderColor(answer: Answer): string {
+  if (answer === 'yes') return 'green.500'
+  if (answer === 'a_bit') return 'yellow.500'
+  if (answer === 'no') return 'orange.500'
+  return 'border.default'
+}
+
 export function QuestionnairePage() {
   const { jobId } = useParams<{ jobId: string }>()
   const id = Number(jobId)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [answers, setAnswers] = useState<Record<string, Answer>>({})
+  const storageKey = `skillfit_answers_${id}`
+  const [answers, setAnswers] = useState<Record<string, Answer>>(() => {
+    try {
+      const s = localStorage.getItem(storageKey)
+      if (s) {
+        const parsed = JSON.parse(s) as Record<string, string>
+        const valid: Record<string, Answer> = {}
+        for (const [k, v] of Object.entries(parsed)) {
+          if (v === 'yes' || v === 'no' || v === 'a_bit') valid[k] = v
+        }
+        return valid
+      }
+    } catch {}
+    return {}
+  })
   const [questionnaireDone, setQuestionnaireDone] = useState(false)
   const [stageProgressPct, setStageProgressPct] = useState(0)
   const [submitProgressPct, setSubmitProgressPct] = useState(0)
+  const [flashId, setFlashId] = useState<string | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
-  const progressRef = useRef<HTMLDivElement>(null)
   const prevQuestionCountRef = useRef(0)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['questionnaire', id],
     queryFn: () => jobApi.getQuestionnaire(id),
     enabled: Number.isFinite(id),
-    refetchInterval: (query) => {
-      const ready = query.state.data?.data?.ready
-      if (ready === false) return 2000
-      return false
-    },
+    refetchInterval: (query) => (query.state.data?.data?.ready === false ? 2000 : false),
   })
 
   const questions = data?.data?.questions ?? []
   const ready = data?.data?.ready !== false
   const current_stage = data?.data?.current_stage ?? 1
+  const total_stages = data?.data?.total_stages ?? getStageNumbers(questions).length
   const currentStageQuestions = getQuestionsForStage(current_stage, questions)
+  const validAnswers = ['yes', 'no', 'a_bit'] as const
   const allAnsweredForStage =
     currentStageQuestions.length > 0 &&
-    currentStageQuestions.every((q) => answers[q.id] === 'yes' || answers[q.id] === 'no')
-  /** Show "Submit & generate resume" only after backend returned done: true (no more stages). Until then, always show "Continue to next stage". */
+    currentStageQuestions.every((q) => answers[q.id] != null && validAnswers.includes(answers[q.id]!))
   const allStagesComplete = questionnaireDone
   const allAnsweredForFinal =
-    questions.length >= 3 &&
-    questions.every((q) => answers[q.id] === 'yes' || answers[q.id] === 'no')
+    questions.length >= 3 && questions.every((q) => answers[q.id] != null && validAnswers.includes(answers[q.id]!))
+  const answeredCount = currentStageQuestions.filter((q) => answers[q.id] != null).length
 
   const submitStage = useMutation({
     mutationFn: async () => {
@@ -87,7 +99,7 @@ export function QuestionnairePage() {
           answers: Object.fromEntries(
             currentStageQuestions.map((q) => [
               q.id,
-              answers[q.id] === 'yes' || answers[q.id] === 'no' ? answers[q.id]! : 'no',
+              answers[q.id] && validAnswers.includes(answers[q.id]!) ? answers[q.id]! : 'no',
             ])
           ) as Record<string, string>,
         },
@@ -96,16 +108,48 @@ export function QuestionnairePage() {
       return { data: res }
     },
     onSuccess: (res) => {
-      if (res?.data && res.data.done) setQuestionnaireDone(true)
+      if (res?.data?.done) setQuestionnaireDone(true)
       setStageProgressPct(0)
       queryClient.invalidateQueries({ queryKey: ['questionnaire', id] })
     },
     onError: () => {
       setStageProgressPct(0)
+      toaster.create({ title: 'Failed to load next stage', type: 'error' })
+    },
+  })
+
+  const submitFinal = useMutation({
+    mutationFn: async () => {
+      setSubmitProgressPct(0)
+      return questionnaireApi.submitStream(
+        id,
+        {
+          answers: Object.fromEntries(
+            questions.map((q) => [
+              q.id,
+              answers[q.id] && validAnswers.includes(answers[q.id]!) ? answers[q.id]! : 'no',
+            ])
+          ) as Record<string, string>,
+        },
+        { onProgress: (pct) => setSubmitProgressPct(pct) }
+      )
+    },
+    onSuccess: () => {
+      setSubmitProgressPct(0)
+      try {
+        localStorage.removeItem(storageKey)
+      } catch {}
+      toaster.create({ title: 'Resume generated', type: 'success' })
+      navigate(`/resume/${id}`)
+    },
+    onError: () => {
+      setSubmitProgressPct(0)
+      toaster.create({ title: 'Resume generation failed', type: 'error' })
     },
   })
 
   const stageNumbers = getStageNumbers(questions)
+
   useEffect(() => {
     if (questions.length > prevQuestionCountRef.current && threadRef.current) {
       prevQuestionCountRef.current = questions.length
@@ -116,197 +160,200 @@ export function QuestionnairePage() {
   }, [questions.length])
 
   useEffect(() => {
-    if (submitStage.isPending && progressRef.current) {
-      progressRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          if (allStagesComplete ? allAnsweredForFinal : allAnsweredForStage) {
+            if (allStagesComplete) submitFinal.mutate()
+            else submitStage.mutate()
+          }
+        }
+        return
+      }
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+      const key = e.key.toLowerCase()
+      const firstUnanswered = currentStageQuestions.find((q) => answers[q.id] == null)
+      if (!firstUnanswered) return
+      if (key === 'y') setAnswer(firstUnanswered.id, 'yes')
+      else if (key === 'a') setAnswer(firstUnanswered.id, 'a_bit')
+      else if (key === 'n') setAnswer(firstUnanswered.id, 'no')
     }
-  }, [submitStage.isPending])
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [currentStageQuestions, answers, allAnsweredForStage, allAnsweredForFinal, allStagesComplete])
 
-  const submitFinalRef = useRef<HTMLDivElement>(null)
-  const submitFinal = useMutation({
-    mutationFn: async () => {
-      setSubmitProgressPct(0)
-      const res = await questionnaireApi.submitStream(
-        id,
-        {
-          answers: Object.fromEntries(
-            questions.map((q) => [
-              q.id,
-              answers[q.id] === 'yes' || answers[q.id] === 'no' ? answers[q.id]! : 'no',
-            ])
-          ) as Record<string, string>,
-        },
-        { onProgress: (pct) => setSubmitProgressPct(pct) }
-      )
-      return res
-    },
-    onSuccess: () => {
-      setSubmitProgressPct(0)
-      navigate(`/resume/${id}`)
-    },
-    onError: () => {
-      setSubmitProgressPct(0)
-    },
-  })
-
-  useEffect(() => {
-    if (submitFinal.isPending && submitFinalRef.current) {
-      submitFinalRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }, [submitFinal.isPending])
-
-  const setAnswer = (qid: string, value: 'yes' | 'no') => {
-    setAnswers((a) => ({ ...a, [qid]: value }))
-  }
-
-  const handleStageContinue = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!allAnsweredForStage) return
-    submitStage.mutate()
-  }
-
-  const handleFinalSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!allAnsweredForFinal) return
-    submitFinal.mutate()
-  }
-
-  if (error) {
-    return (
-      <Box className="questionnaireError" p={8} textAlign="center" width="100%">
-        <Text color="red.400">Questionnaire not found or not ready.</Text>
-      </Box>
-    )
-  }
-  const showWaiting = isLoading || !Number.isFinite(id) || !ready || !questions.length
-  if (showWaiting) {
-    return (
-      <Box className="questionnairePage" width="100%" mx="auto" p={6} boxSizing="border-box">
-        <Heading size="lg" mb={2}>Concept checklist</Heading>
-        <Text color="gray.500" mb={6}>
-          {!ready ? 'Preparing your personalized concept list…' : 'Loading…'}
-        </Text>
-        <VStack gap={4} align="stretch" width="100%">
-          {Array.from({ length: 10 }).map((_, i) => (
-            <Flex key={i} p={5} borderRadius="lg" bg="gray.800" gap={3} direction="column" width="100%" boxSizing="border-box">
-              <Skeleton height="12px" width="64px" />
-              <Skeleton height="16px" width={`${60 + (i % 4) * 10}%`} />
-              {i % 3 === 0 && <Skeleton height="12px" width="85%" />}
-              <Flex gap={2} mt={3}>
-                <Skeleton height="36px" width="96px" />
-                <Skeleton height="36px" width="96px" />
-              </Flex>
-            </Flex>
-          ))}
-        </VStack>
-        <Skeleton height="40px" width="192px" mt={6} />
-      </Box>
-    )
+  const setAnswer = (qid: string, value: Answer) => {
+    if (value == null) return
+    setFlashId(qid)
+    setTimeout(() => setFlashId(null), 300)
+    setAnswers((a) => {
+      const next = { ...a, [qid]: value }
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(next))
+      } catch {}
+      return next
+    })
   }
 
   const isPending = submitStage.isPending || submitFinal.isPending
   const submitError = submitStage.isError ? submitStage.error : submitFinal.isError ? submitFinal.error : null
 
-  return (
-    <Box className="questionnairePage questionnairePageThread animateFadeIn" width="100%" mx="auto" p={6} boxSizing="border-box" height="100%" display="flex" flexDirection="column">
-      <Heading size="lg" mb={2}>Concept checklist</Heading>
-      <Text color="gray.500" mb={4}>
-        For each concept, choose <strong>Yes</strong> if you're confident and can demonstrate it, or <strong>No</strong> if you need to prepare. Answer each set and click Continue to get the next set.
-      </Text>
+  if (error) {
+    return <Alert status="error">Questionnaire not found or not ready.</Alert>
+  }
 
-      <Box ref={threadRef} className="questionnaireThread" flex="1" overflowY="auto" overflowX="hidden" minH="0" pr={2}>
+  if (isLoading || !Number.isFinite(id) || !ready || !questions.length) {
+    return (
+      <Box>
+        <PageHeader title="Concept checklist" subtitle="Preparing your personalized concept list…" badge={<AiBadge />} />
+        <VStack gap={4} align="stretch">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i} p={5}>
+              <Skeleton height="12px" width="64px" mb={2} />
+              <Skeleton height="16px" width={`${60 + (i % 4) * 10}%`} />
+            </Card>
+          ))}
+        </VStack>
+      </Box>
+    )
+  }
+
+  return (
+    <Flex direction="column" minH="calc(100vh - 200px)">
+      <PageHeader
+        title="Concept checklist"
+        subtitle={`Stage ${current_stage} of ${total_stages} · ${answeredCount} of ${currentStageQuestions.length} answered · Shortcuts: Y / A / N · Ctrl+Enter to submit`}
+        badge={<AiBadge />}
+        breadcrumbs={[{ label: 'Job input', to: '/job' }, { label: 'Questionnaire' }]}
+      />
+
+      <Box ref={threadRef} flex={1} overflowY="auto" pb={24}>
         {stageNumbers.map((stageNum) => {
           const stageQuestions = getQuestionsForStage(stageNum, questions)
           if (stageQuestions.length === 0) return null
           const isCurrentStage = stageNum === current_stage
-          const showButton = isCurrentStage
           return (
-            <Box key={stageNum} className="threadStageBlock">
-              {/* Questions – one below the other */}
-              <Text fontSize="xs" fontWeight="600" color="gray.400" textTransform="uppercase" letterSpacing="wider" mb={3} mt={6}>
+            <Box key={stageNum} mb={8}>
+              <Text fontSize="xs" fontWeight="600" color="fg.muted" textTransform="uppercase" letterSpacing="wider" mb={3}>
                 {stageNum === 1 ? 'First set' : `Set ${stageNum}`}
               </Text>
-              <VStack listStyle="none" p={0} m={0} align="stretch" gap={4} as="ul" width="100%" sx={{ listStyle: 'none' }}>
+              <VStack gap={4} align="stretch">
                 {stageQuestions.map((q) => (
-                  <Box key={q.id} as="li" p={5} borderRadius="lg" bg="gray.800" borderLeftWidth="4px" borderLeftColor={answers[q.id] === 'yes' ? 'green.500' : answers[q.id] === 'no' ? 'orange.500' : 'gray.600'}>
-                    <Text fontSize="xs" textTransform="uppercase" letterSpacing="wider" color="gray.400" mb={1}>{q.category.replace(/_/g, ' ')}</Text>
-                    <Text fontWeight="600" mb={2}>{q.concept}</Text>
-                    {q.description && <Text fontSize="sm" color="gray.400" mb={4}>{q.description}</Text>}
+                  <Card
+                    key={q.id}
+                    p={5}
+                    borderLeftWidth="4px"
+                    borderLeftColor={answerBorderColor(answers[q.id] ?? null)}
+                    transition="border-color 0.3s ease"
+                    transform={flashId === q.id ? 'scale(1.01)' : undefined}
+                  >
+                    <Text fontSize="xs" textTransform="uppercase" color="fg.muted" mb={1}>
+                      {q.category.replace(/_/g, ' ')}
+                    </Text>
+                    <Text fontWeight="600" mb={2}>
+                      {q.concept}
+                    </Text>
+                    {q.description && (
+                      <Text fontSize="sm" color="fg.muted" mb={4}>
+                        {q.description}
+                      </Text>
+                    )}
                     {isCurrentStage ? (
                       <Flex gap={2} flexWrap="wrap">
-                        <Button size="sm" variant={answers[q.id] === 'yes' ? 'solid' : 'outline'} colorPalette={answers[q.id] === 'yes' ? 'green' : 'gray'} color={answers[q.id] === 'yes' ? undefined : 'gray.200'} borderColor={answers[q.id] === 'yes' ? undefined : 'gray.500'} onClick={() => setAnswer(q.id, 'yes')}><HiCheck style={{ marginRight: 6 }} /> Yes — I'm aware</Button>
-                        <Button size="sm" variant={answers[q.id] === 'no' ? 'solid' : 'outline'} colorPalette={answers[q.id] === 'no' ? 'orange' : 'gray'} color={answers[q.id] === 'no' ? undefined : 'gray.200'} borderColor={answers[q.id] === 'no' ? undefined : 'gray.500'} onClick={() => setAnswer(q.id, 'no')}><HiX style={{ marginRight: 6 }} /> No — I need to prepare</Button>
+                        {(
+                          [
+                            { val: 'yes' as const, label: 'Yes', icon: HiCheck, palette: 'green' },
+                            { val: 'a_bit' as const, label: 'A bit', palette: 'yellow' },
+                            { val: 'no' as const, label: 'No', icon: HiX, palette: 'orange' },
+                          ] as Array<{ val: 'yes' | 'a_bit' | 'no'; label: string; icon?: typeof HiCheck; palette: string }>
+                        ).map(({ val, label, icon: Icon, palette }) => (
+                          <Button
+                            key={val}
+                            flex={1}
+                            minH="44px"
+                            variant={answers[q.id] === val ? 'primary' : 'outline'}
+                            colorPalette={answers[q.id] === val ? palette : undefined}
+                            onClick={() => setAnswer(q.id, val)}
+                            icon={Icon ? <Icon aria-hidden /> : undefined}
+                          >
+                            {label}
+                          </Button>
+                        ))}
                       </Flex>
                     ) : (
-                      <Text fontSize="sm" color="gray.500">You answered: <strong>{answers[q.id] === 'yes' ? 'Yes' : answers[q.id] === 'no' ? 'No' : '—'}</strong></Text>
+                      <Text fontSize="sm" color="fg.muted">
+                        Answered:{' '}
+                        <strong>
+                          {answers[q.id] === 'yes' ? 'Yes' : answers[q.id] === 'a_bit' ? 'A bit' : answers[q.id] === 'no' ? 'No' : '—'}
+                        </strong>
+                      </Text>
                     )}
-                  </Box>
+                  </Card>
                 ))}
               </VStack>
 
-              {/* Button – directly below this set of questions */}
-              {showButton && (
-                <form onSubmit={allStagesComplete ? handleFinalSubmit : handleStageContinue} style={{ opacity: isPending ? 0.7 : 1, pointerEvents: isPending ? 'none' : 'auto', width: '100%', marginTop: 24 }}>
-                  {!allAnsweredForStage && !allStagesComplete && (
-                    <Text fontSize="sm" color="gray.400" mb={2}>
-                      Answer every concept above (Yes or No) to continue.
-                    </Text>
-                  )}
-                  {allStagesComplete && !allAnsweredForFinal && (
-                    <Text fontSize="sm" color="gray.400" mb={2}>
-                      Answer every concept above to submit and generate your resume.
-                    </Text>
-                  )}
-                  {submitError && (
-                    <Text color="red.400" fontSize="sm" mb={2}>
-                      {(submitError as Error)?.message ?? (submitError as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Request failed'}
-                    </Text>
-                  )}
-                  <Button
-                    type="submit"
-                    colorPalette="blue"
-                    disabled={isPending || (allStagesComplete ? !allAnsweredForFinal : !allAnsweredForStage)}
-                  >
-                    {isPending
-                      ? allStagesComplete
-                        ? 'Submitting...'
-                        : 'Loading next batch...'
-                      : allStagesComplete
-                        ? 'Submit & generate resume'
-                        : 'Continue'}
-                    <HiArrowRight style={{ marginLeft: 8 }} />
-                  </Button>
-                </form>
+              {isCurrentStage && (submitStage.isPending || stageProgressPct > 0) && !allStagesComplete && (
+                <Box mt={4}>
+                  <ProgressBar value={stageProgressPct} stageLabel="Generating next questions…" />
+                </Box>
               )}
 
-              {/* Progress bar – directly below "Submit & generate resume" when clicked */}
-              {showButton && allStagesComplete && (submitFinal.isPending || submitProgressPct > 0) && (
-                <div ref={submitFinalRef} className="threadProgressBlock" role="progressbar" aria-valuenow={submitProgressPct} aria-valuemin={0} aria-valuemax={100} aria-label="Generating resume">
-                  <div className="progressBarWrap">
-                    <div className="progressBarTrack">
-                      <div className="progressBarFill" style={{ width: `${submitProgressPct}%` }} />
-                    </div>
-                    <span className="progressBarLabel">{submitProgressPct}%</span>
-                  </div>
-                  <Text fontSize="sm" color="gray.500" mt={2}>Generating your resume…</Text>
-                </div>
-              )}
-
-              {/* Progress bar – directly below the button when loading next set (same UI as first occurrence) */}
-              {submitStage.isPending && !allStagesComplete && current_stage === stageNum && (
-                <div ref={progressRef} className="threadProgressBlock" role="progressbar" aria-valuenow={stageProgressPct} aria-valuemin={0} aria-valuemax={100} aria-label="Generating next questions">
-                  <div className="progressBarWrap">
-                    <div className="progressBarTrack">
-                      <div className="progressBarFill" style={{ width: `${stageProgressPct}%` }} />
-                    </div>
-                    <span className="progressBarLabel">{stageProgressPct}%</span>
-                  </div>
-                </div>
+              {isCurrentStage && allStagesComplete && (submitFinal.isPending || submitProgressPct > 0) && (
+                <Box mt={4}>
+                  <ProgressBar value={submitProgressPct} stageLabel="Generating your resume…" />
+                </Box>
               )}
             </Box>
           )
         })}
       </Box>
-    
-    </Box>
+
+      {/* Sticky action bar */}
+      {stageNumbers.includes(current_stage) && (
+        <Box
+          position="sticky"
+          bottom={0}
+          py={4}
+          px={4}
+          mx={-4}
+          bg="bg.canvas"
+          borderTopWidth="1px"
+          borderColor="border.default"
+          backdropFilter="blur(8px)"
+          zIndex={10}
+        >
+          {submitError && (
+            <Box mb={2}>
+              <Alert status="error">{(submitError as Error)?.message ?? 'Request failed'}</Alert>
+            </Box>
+          )}
+          {!allAnsweredForStage && !allStagesComplete && (
+            <Text fontSize="sm" color="fg.muted" mb={2}>
+              Answer every concept above to continue.
+            </Text>
+          )}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (allStagesComplete ? allAnsweredForFinal : allAnsweredForStage) {
+                if (allStagesComplete) submitFinal.mutate()
+                else submitStage.mutate()
+              }
+            }}
+          >
+            <Button
+              type="submit"
+              loading={isPending}
+              disabled={isPending || (allStagesComplete ? !allAnsweredForFinal : !allAnsweredForStage)}
+              icon={<HiArrowRight aria-hidden />}
+            >
+              {allStagesComplete ? 'Submit & generate resume' : 'Continue to next stage'}
+            </Button>
+          </form>
+        </Box>
+      )}
+    </Flex>
   )
 }

@@ -39,6 +39,7 @@ export default api
 export interface JobInputRequest {
   job_title?: string
   job_description?: string
+  company_name?: string
 }
 
 export interface JobInputResponse {
@@ -76,6 +77,7 @@ export interface StageAnswersResponse {
   current_stage: number
   done: boolean
   message: string
+  total_stages?: number
 }
 
 /** True if backend returned done: true (no more stages; user can submit to generate resume). */
@@ -117,16 +119,30 @@ export interface SkillGapDashboardItem {
   scores_by_area?: Record<string, unknown>[]
 }
 
-/** Normalize item to { text, study_urls } for consistent rendering. */
+/** Normalize item to { text, study_urls } for consistent rendering. YouTube links are excluded. */
 export function normalizeGapItem(item: string | SkillGapItemWithUrls): SkillGapItemWithUrls {
   if (typeof item === 'string') return { text: item, study_urls: { websites: [], youtube: [] } }
+  const websites = Array.isArray(item.study_urls?.websites) ? item.study_urls.websites : []
+  const filteredWebsites = websites.filter(
+    (url) => url && !url.toLowerCase().includes('youtube.com') && !url.toLowerCase().includes('youtu.be')
+  )
   return {
     text: item.text ?? '',
     study_urls: {
-      websites: Array.isArray(item.study_urls?.websites) ? item.study_urls.websites : [],
-      youtube: Array.isArray(item.study_urls?.youtube) ? item.study_urls.youtube : [],
+      websites: filteredWebsites,
+      youtube: [],
     },
   }
+}
+
+function isYoutubeUrl(url: string): boolean {
+  const lower = url.toLowerCase()
+  return lower.includes('youtube.com') || lower.includes('youtu.be')
+}
+
+/** Website/documentation links only — no YouTube. */
+export function filterGuidanceUrls(urls: string[]): string[] {
+  return urls.filter((url) => url && !isYoutubeUrl(url))
 }
 
 export interface ResumePreviewResponse {
@@ -141,7 +157,58 @@ function getWsBaseUrl(): string {
   return `${protocol}//${window.location.host}/api`
 }
 
+export interface JobSubmissionListItem {
+  id: number
+  job_title?: string | null
+  company_name?: string | null
+  status: string
+  workflow_mode?: string | null
+  created_at: string
+}
+
+export interface FitReportItem {
+  topic: string
+  detail: string
+  study_urls: string[]
+}
+
+export interface FitReportData {
+  overall_fit_score: number
+  role_readiness_summary: string
+  strengths: string[]
+  gaps: string[]
+  preparation_plan: FitReportItem[]
+  ats_keywords_matched: string[]
+  ats_keywords_missing: string[]
+}
+
+export interface FitReportResponse {
+  job_submission_id: number
+  job_title?: string | null
+  company_name?: string | null
+  status: string
+  fit_report: FitReportData
+}
+
+export interface JobCompareItem {
+  job_submission_id: number
+  job_title?: string | null
+  company_name?: string | null
+  extracted_skills?: Record<string, unknown> | null
+  skill_gap_summary?: Record<string, unknown> | null
+  overall_gap_severity: string
+}
+
+export interface JobCompareResponse {
+  job_1: JobCompareItem
+  job_2: JobCompareItem
+}
+
 export const jobApi = {
+  list: () => api.get<{ items: JobSubmissionListItem[] }>('/job/'),
+  compare: (jobId1: number, jobId2: number) =>
+    api.get<JobCompareResponse>('/job/compare', { params: { job_id_1: jobId1, job_id_2: jobId2 } }),
+  fetchJd: (url: string) => api.post<{ job_description: string; job_title?: string }>('/job/fetch-jd', { url }),
   input: (data: JobInputRequest) => api.post<JobInputResponse>('/job/input', data),
   getQuestionnaire: (jobId: number) => api.get<QuestionnaireResponse>(`/job/${jobId}/questionnaire`),
   submitStageAnswers: (jobId: number, data: StageAnswersRequest) =>
@@ -247,6 +314,58 @@ export const jobApi = {
     if (jobSubmissionId == null) throw new Error('Stream ended without job_submission_id')
     return jobSubmissionId
   },
+  /** Stream fit report generation (SSE); no questionnaire questions. */
+  async inputFitReportStream(
+    data: JobInputRequest,
+    callbacks?: { onProgress?: (progress_pct: number, phase?: string) => void }
+  ): Promise<number> {
+    const onProgress = callbacks?.onProgress
+    const token = getAuthToken()
+    const res = await fetch('/api/job/input/fit-report/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error((err as { detail?: string }).detail ?? `Request failed: ${res.status}`)
+    }
+    const reader = res.body?.getReader()
+    if (!reader) throw new Error('No response body')
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let jobSubmissionId: number | null = null
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const events = buffer.split('\n\n')
+      buffer = events.pop() ?? ''
+      for (const block of events) {
+        let event = 'message'
+        let dataLine = ''
+        for (const line of block.split('\n')) {
+          if (line.startsWith('event: ')) event = line.slice(7).trim()
+          else if (line.startsWith('data: ')) dataLine = line.slice(6)
+        }
+        if (!dataLine) continue
+        try {
+          const payload = JSON.parse(dataLine)
+          if (event === 'started' && payload.job_submission_id != null) jobSubmissionId = Number(payload.job_submission_id)
+          else if (event === 'progress' && typeof payload.progress_pct === 'number') onProgress?.(payload.progress_pct, payload.phase)
+          else if (event === 'done' && payload.job_submission_id != null) jobSubmissionId = Number(payload.job_submission_id)
+          else if (event === 'error' && payload.detail) throw new Error(payload.detail)
+        } catch (e) {
+          if (e instanceof Error && event === 'error') throw e
+          if (e instanceof SyntaxError) continue
+          throw e
+        }
+      }
+    }
+    if (jobSubmissionId == null) throw new Error('Stream ended without job_submission_id')
+    return jobSubmissionId
+  },
+  getFitReport: (jobId: number) => api.get<FitReportResponse>(`/job/${jobId}/fit-report`),
   /**
    * Submit stage answers via WebSocket: receives LLM progress (0–100) while generating next questions.
    */
@@ -441,23 +560,99 @@ export const questionnaireApi = {
   },
 }
 
+export interface SkillGraphNode {
+  id: string
+  label: string
+  category: string
+  strength: 'strong' | 'partial' | 'gap'
+}
+
+export interface SkillGraphResponse {
+  nodes: SkillGraphNode[]
+  edges: { source: string; target: string; type: string }[]
+}
+
 export const gapApi = {
   list: () => api.get<{ items: SkillGapDashboardItem[] }>('/gap/'),
   get: (jobId: number) => api.get<SkillGapDashboardItem>(`/gap/${jobId}`),
+  skillGraph: (jobId: number) => api.get<SkillGraphResponse>(`/gap/${jobId}/skill-graph`),
+  exportUrl: (jobId: number, format: 'md' | 'pdf') => `/api/gap/${jobId}/export?format=${format}`,
+  exportBlob: async (jobId: number, format: 'md' | 'pdf'): Promise<Blob> => {
+    const { data } = await api.get(`/gap/${jobId}/export`, { params: { format }, responseType: 'blob' })
+    return data as Blob
+  },
+}
+
+export interface ResumeVersionItem {
+  id: number
+  version: number
+  created_at: string
+}
+
+export interface ResumeVersionsResponse {
+  job_submission_id: number
+  versions: ResumeVersionItem[]
+}
+
+export interface ResumeDiffResponse {
+  job_submission_id: number
+  v1: number
+  v2: number
+  removed: { section: string; text: string; status: string }[]
+  added: { section: string; text: string; status: string }[]
+  unchanged: { section: string; text: string; status: string }[]
 }
 
 export const resumeApi = {
   preview: (jobId: number) => api.get<ResumePreviewResponse>(`/resume/preview/${jobId}`),
+  previewVersion: (jobId: number, version: number) =>
+    api.get<ResumePreviewResponse>(`/resume/preview/${jobId}/version/${version}`),
+  versions: (jobId: number) => api.get<ResumeVersionsResponse>(`/resume/versions/${jobId}`),
+  diff: (jobId: number, v1: number, v2: number) =>
+    api.get<ResumeDiffResponse>(`/resume/diff/${jobId}`, { params: { v1, v2 } }),
+  atsScore: (jobId: number) =>
+    api.get<{ score: number; matched_keywords: string[]; missing_keywords: string[] }>(`/resume/ats-score/${jobId}`),
+  share: (jobSubmissionId: number) =>
+    api.post<{ share_url: string; expires_at: string }>('/resume/share', { job_submission_id: jobSubmissionId }),
+  tailoredSummary: (jobId: number) =>
+    api.post<{ one_liner: string }>('/resume/tailored-summary', { job_submission_id: jobId }),
   downloadUrl: (jobId: number) => `/api/resume/download/${jobId}`,
+  downloadPdfUrl: (jobId: number) => `/api/resume/download/${jobId}/pdf`,
   downloadBlob: async (jobId: number): Promise<Blob> => {
     const { data } = await api.get(`/resume/download/${jobId}`, { responseType: 'blob' })
     return data as Blob
   },
 }
 
+export interface ProfileResponse {
+  skills: string[]
+  experience_summary?: string | null
+  baseline_resume_json?: Record<string, unknown> | null
+}
+
+export const profileApi = {
+  get: () => api.get<ProfileResponse>('/profile'),
+  update: (data: { skills?: string[]; experience_summary?: string | null }) =>
+    api.put<ProfileResponse>('/profile', data),
+  uploadResume: async (file: File): Promise<{ message: string; chars_extracted: number }> => {
+    const form = new FormData()
+    form.append('file', file)
+    const token = getAuthToken()
+    const res = await fetch('/api/profile/resume', {
+      method: 'PUT',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error((err as { detail?: string }).detail ?? 'Upload failed')
+    }
+    return res.json()
+  },
+}
+
 export const authApi = {
-  register: (email: string, password: string, full_name?: string) =>
-    api.post('/auth/register', { email, password, full_name }),
-  login: (email: string, password: string) =>
-    api.post<{ access_token: string }>('/auth/login', { email, password }),
+  firebaseLogin: (idToken: string) =>
+    api.post<{ access_token: string; token_type: string }>('/auth/firebase', { id_token: idToken }),
+  me: () => api.get<{ id: number; email: string; full_name?: string | null }>('/auth/me'),
 }
