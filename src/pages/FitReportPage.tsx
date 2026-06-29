@@ -1,11 +1,10 @@
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Box, Flex, Grid, Text, List, Link as ChakraLink } from '@chakra-ui/react'
-import { HiArrowRight, HiCheckCircle, HiExclamation, HiLightBulb, HiUser } from 'react-icons/hi'
+import { HiCheckCircle, HiExclamation, HiLightBulb } from 'react-icons/hi'
 import { jobApi, filterGuidanceUrls } from '../api/client'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Card } from '../components/ui/Card'
-import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { AtsGauge } from '../components/ui/AtsGauge'
 import { Skeleton } from '../components/ui/Skeleton'
@@ -85,11 +84,6 @@ export function FitReportPage() {
       <Box>
         <PageHeader title="Fit report" subtitle="Could not load fit report." />
         <Alert status="error">Fit report not found or unavailable.</Alert>
-        <Link to="/job/history">
-          <Button variant="outline" mt={4}>
-            Back to history
-          </Button>
-        </Link>
       </Box>
     )
   }
@@ -209,22 +203,6 @@ export function FitReportPage() {
           </Flex>
         </Box>
       </Card>
-
-      <Flex gap={3} flexWrap="wrap">
-        <Link to="/profile">
-          <Button variant="outline" icon={<HiUser aria-hidden />}>
-            Update resume
-          </Button>
-        </Link>
-        <Link to="/job/history">
-          <Button variant="outline">Job history</Button>
-        </Link>
-        <Link to={`/questionnaire/${report.job_submission_id}`}>
-          <Button variant="ghost" icon={<HiArrowRight aria-hidden />}>
-            Run questionnaire anyway
-          </Button>
-        </Link>
-      </Flex>
     </Box>
   )
 }
