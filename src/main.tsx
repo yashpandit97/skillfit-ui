@@ -7,7 +7,10 @@ import { system } from './theme'
 import { ThemeSync } from './components/ThemeSync'
 import { Toaster } from './components/ui/toaster'
 import { loadApiConfig } from './lib/apiBase'
-import { syncApiClientBaseUrl } from './api/client'
+import { authApi, syncApiClientBaseUrl } from './api/client'
+import { completeGoogleRedirect, formatFirebaseAuthError } from './lib/firebase'
+import { formatAuthError } from './lib/authErrors'
+import { setAuthBootError, useAuthStore } from './store/authStore'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -16,9 +19,26 @@ const queryClient = new QueryClient({
   },
 })
 
+async function completeGoogleRedirectLogin() {
+  const result = await completeGoogleRedirect()
+  if (!result?.user) return
+
+  const idToken = await result.user.getIdToken(true)
+  if (!idToken) throw new Error('Could not get Firebase session')
+
+  const { data } = await authApi.firebaseLogin(idToken)
+  useAuthStore.getState().setToken(data.access_token)
+}
+
 async function bootstrap() {
   await loadApiConfig()
   syncApiClientBaseUrl()
+
+  try {
+    await completeGoogleRedirectLogin()
+  } catch (err) {
+    setAuthBootError(formatFirebaseAuthError(err) || formatAuthError(err))
+  }
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>

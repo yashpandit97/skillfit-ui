@@ -17,11 +17,34 @@ export const firebaseAuth = getAuth(firebaseApp)
 const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
 
+let redirectResultPromise: ReturnType<typeof getRedirectResult> | null = null
+
 /** Redirect flow avoids Cross-Origin-Opener-Policy issues with signInWithPopup on static hosts. */
 export async function signInWithGoogle() {
+  redirectResultPromise = null
   await signInWithRedirect(firebaseAuth, googleProvider)
 }
 
+/** Firebase allows getRedirectResult only once per redirect — reuse the same promise. */
 export function completeGoogleRedirect() {
-  return getRedirectResult(firebaseAuth)
+  if (!redirectResultPromise) {
+    redirectResultPromise = getRedirectResult(firebaseAuth)
+  }
+  return redirectResultPromise
+}
+
+const FIREBASE_AUTH_ERRORS: Record<string, string> = {
+  'auth/unauthorized-domain':
+    'This site is not authorized in Firebase. Add your URL under Authentication → Settings → Authorized domains.',
+  'auth/operation-not-allowed': 'Google sign-in is not enabled in Firebase Authentication.',
+  'auth/popup-closed-by-user': 'Sign-in was cancelled.',
+  'auth/account-exists-with-different-credential':
+    'An account already exists with this email using a different sign-in method.',
+}
+
+export function formatFirebaseAuthError(err: unknown): string {
+  const code = (err as { code?: string })?.code
+  if (code && FIREBASE_AUTH_ERRORS[code]) return FIREBASE_AUTH_ERRORS[code]
+  if (err instanceof Error) return err.message
+  return 'Google sign-in failed'
 }
