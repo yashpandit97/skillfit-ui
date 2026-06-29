@@ -17,3 +17,26 @@ export const useAuthStore = create<AuthState>()(
     { name: 'auth' }
   )
 )
+
+/** Wait for persisted auth state before routing decisions. */
+export function waitForAuthHydration(): Promise<void> {
+  if (useAuthStore.persist.hasHydrated()) return Promise.resolve()
+  return new Promise((resolve) => {
+    const unsub = useAuthStore.persist.onFinishHydration(() => {
+      unsub()
+      resolve()
+    })
+  })
+}
+
+const AUTH_BOOT_ERROR_KEY = 'authBootError'
+
+export function setAuthBootError(message: string) {
+  sessionStorage.setItem(AUTH_BOOT_ERROR_KEY, message)
+}
+
+export function consumeAuthBootError(): string | null {
+  const message = sessionStorage.getItem(AUTH_BOOT_ERROR_KEY)
+  if (message) sessionStorage.removeItem(AUTH_BOOT_ERROR_KEY)
+  return message
+}

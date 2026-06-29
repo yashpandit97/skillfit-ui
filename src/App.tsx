@@ -1,3 +1,4 @@
+import React, { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { JobInputPage } from './pages/JobInputPage'
@@ -13,10 +14,21 @@ import { SkillGraphPage } from './pages/SkillGraphPage'
 import { SharedPage } from './pages/SharedPage'
 import { FitReportPage } from './pages/FitReportPage'
 import { LoginPage } from './pages/LoginPage'
-import { useAuthStore } from './store/authStore'
+import { useAuthStore, waitForAuthHydration } from './store/authStore'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
+  const [ready, setReady] = useState(useAuthStore.persist.hasHydrated())
+
+  useEffect(() => {
+    if (useAuthStore.persist.hasHydrated()) {
+      setReady(true)
+      return
+    }
+    void waitForAuthHydration().then(() => setReady(true))
+  }, [])
+
+  if (!ready) return null
   if (!token) return <Navigate to="/login" replace />
   return <>{children}</>
 }

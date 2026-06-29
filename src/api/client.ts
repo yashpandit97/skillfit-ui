@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { getApiBase, apiUrl, getWsBaseUrl } from '../lib/apiBase'
+import { isAuthEndpoint } from '../lib/authErrors'
 
 const api = axios.create({
   baseURL: getApiBase(),
@@ -30,7 +31,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   (e) => {
-    if (e.response?.status === 401) {
+    const status = e.response?.status
+    const requestUrl = e.config?.url ?? ''
+    const onLoginPage = window.location.pathname === '/login'
+
+    if (status === 401 && !isAuthEndpoint(requestUrl) && !onLoginPage) {
       localStorage.removeItem('auth')
       window.location.href = '/login'
     }
