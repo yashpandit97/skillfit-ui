@@ -5,7 +5,7 @@ import { HiLockClosed, HiMail, HiLogin } from 'react-icons/hi'
 import { FcGoogle } from 'react-icons/fc'
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth'
 import { authApi } from '../api/client'
-import { firebaseAuth, signInWithGoogle } from '../lib/firebase'
+import { firebaseAuth, signInWithGoogle, formatFirebaseAuthError } from '../lib/firebase'
 import { formatAuthError } from '../lib/authErrors'
 import { consumeAuthBootError, useAuthStore } from '../store/authStore'
 import { Card } from '../components/ui/Card'
@@ -84,9 +84,14 @@ export function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      await signInWithGoogle()
+      const result = await signInWithGoogle()
+      if (!result) return // redirect flow — page navigates away
+      await exchangeFirebaseToken()
+      toaster.create({ title: 'Welcome back', type: 'success' })
+      navigate('/job')
     } catch (err: unknown) {
-      setError(formatAuthError(err))
+      setError(formatFirebaseAuthError(err) || formatAuthError(err))
+    } finally {
       setLoading(false)
     }
   }
