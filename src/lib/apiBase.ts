@@ -5,7 +5,15 @@ export function getApiBase(): string {
   return apiBase
 }
 
+function isLocalDevHost(): boolean {
+  const host = window.location.hostname
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
+}
+
 export async function loadApiConfig(): Promise<void> {
+  // Local Vite dev uses the /api proxy to localhost:8000; ignore production config.json.
+  if (isLocalDevHost()) return
+
   try {
     const res = await fetch('/config.json', { cache: 'no-store' })
     if (!res.ok) return
