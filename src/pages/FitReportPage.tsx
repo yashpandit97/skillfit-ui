@@ -1,14 +1,17 @@
 import { useParams } from 'react-router-dom'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Box, Flex, Grid, Text, List, Link as ChakraLink } from '@chakra-ui/react'
-import { HiCheckCircle, HiExclamation, HiLightBulb } from 'react-icons/hi'
+import { HiCheckCircle, HiExclamation, HiLightBulb, HiDownload } from 'react-icons/hi'
 import { jobApi, filterGuidanceUrls } from '../api/client'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
 import { AtsGauge } from '../components/ui/AtsGauge'
 import { Skeleton } from '../components/ui/Skeleton'
 import { Alert } from '../components/ui/Alert'
+import { downloadFitReportPdf } from '../lib/fitReportPdf'
 
 function FitReportItemList({
   items,
@@ -60,6 +63,7 @@ function FitReportItemList({
 export function FitReportPage() {
   const { jobId } = useParams<{ jobId: string }>()
   const id = Number(jobId)
+  const [downloading, setDownloading] = useState(false)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['fit-report', id],
@@ -90,6 +94,15 @@ export function FitReportPage() {
 
   const fit = report.fit_report
 
+  const handleDownloadPdf = () => {
+    setDownloading(true)
+    try {
+      downloadFitReportPdf(report)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   return (
     <Box minW={0} overflow="hidden">
       <PageHeader
@@ -100,6 +113,16 @@ export function FitReportPage() {
           { label: 'History', to: '/job/history' },
           { label: 'Fit report' },
         ]}
+        actions={
+          <Button
+            variant="outline"
+            icon={<HiDownload aria-hidden />}
+            loading={downloading}
+            onClick={handleDownloadPdf}
+          >
+            Download PDF
+          </Button>
+        }
       />
 
       <Card p={6} mb={6} minW={0}>

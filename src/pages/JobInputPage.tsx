@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Box, Flex, Grid, Text, List } from '@chakra-ui/react'
 import { HiBriefcase, HiDocumentText, HiArrowRight, HiUpload } from 'react-icons/hi'
 import { jobApi, profileApi } from '../api/client'
@@ -54,6 +54,7 @@ export function JobInputPage() {
   const [selectedResumeName, setSelectedResumeName] = useState<string | null>(null)
   const resumeInputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const { data: profileData } = useQuery({
     queryKey: ['profile'],
@@ -79,7 +80,11 @@ export function JobInputPage() {
     try {
       await profileApi.uploadResume(file)
       setResumeOnFile(true)
-      toaster.create({ title: 'Resume uploaded', type: 'success' })
+      await queryClient.invalidateQueries({ queryKey: ['profile'] })
+      toaster.create({
+        title: resumeOnFile ? 'Resume updated' : 'Resume uploaded',
+        type: 'success',
+      })
     } catch (err) {
       setStreamError(err instanceof Error ? err.message : 'Resume upload failed')
       setSelectedResumeName(null)
@@ -134,47 +139,43 @@ export function JobInputPage() {
 
   const resumeSection = (
     <Box mb={4} p={4} borderRadius="lg" borderWidth="1px" borderColor="border.subtle" bg="bg.subtle">
-        {resumeOnFile ? (
-          <Text fontSize="sm" color="fg.muted">
-            Using resume from your profile.{' '}
-            <Text as="span" color="accent.muted">
-              Ready to analyze.
+      <Text fontSize="sm" color="fg.muted" mb={3}>
+        {resumeOnFile
+          ? 'A resume is saved to your profile. Upload a new file to replace it for this analysis.'
+          : 'Upload your resume (.pdf or .docx) to compare against this job.'}
+      </Text>
+      <FormField label={resumeOnFile ? 'Resume on file' : 'Resume file'}>
+        <Flex align="center" gap={3} flexWrap="wrap">
+          <input
+            ref={resumeInputRef}
+            type="file"
+            accept={RESUME_ACCEPT}
+            hidden
+            onChange={handleResumeUpload}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            loading={uploadingResume}
+            icon={<HiUpload aria-hidden />}
+            onClick={handleChooseResume}
+          >
+            {resumeOnFile ? 'Upload new resume' : 'Choose file'}
+          </Button>
+          {resumeOnFile && !selectedResumeName && (
+            <Text fontSize="sm" color="accent.muted">
+              Ready to analyze
             </Text>
-          </Text>
-        ) : (
-          <>
-            <Text fontSize="sm" color="fg.muted" mb={3}>
-              Upload your resume (.pdf or .docx) to compare against this job.
+          )}
+          {selectedResumeName && (
+            <Text fontSize="sm" color="fg.muted">
+              {selectedResumeName}
             </Text>
-            <FormField label="Resume file">
-              <Flex align="center" gap={3} flexWrap="wrap">
-                <input
-                  ref={resumeInputRef}
-                  type="file"
-                  accept={RESUME_ACCEPT}
-                  hidden
-                  onChange={handleResumeUpload}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  loading={uploadingResume}
-                  icon={<HiUpload aria-hidden />}
-                  onClick={handleChooseResume}
-                >
-                  Choose file
-                </Button>
-                {selectedResumeName && (
-                  <Text fontSize="sm" color="fg.muted">
-                    {selectedResumeName}
-                  </Text>
-                )}
-              </Flex>
-            </FormField>
-          </>
-        )}
-      </Box>
-    )
+          )}
+        </Flex>
+      </FormField>
+    </Box>
+  )
 
   const formCard = (
     <Card p={6} className={streaming ? 'gradient-border-active' : undefined}>
