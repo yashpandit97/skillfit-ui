@@ -24,6 +24,13 @@ export function LoginPage() {
   const setToken = useAuthStore((s) => s.setToken)
   const navigate = useNavigate()
 
+  const exchangeFirebaseToken = async () => {
+    const idToken = await firebaseAuth.currentUser?.getIdToken(true)
+    if (!idToken) throw new Error('Could not get Firebase session')
+    const { data } = await authApi.firebaseLogin(idToken)
+    setToken(data.access_token)
+  }
+
   useEffect(() => {
     const bootError = consumeAuthBootError()
     if (bootError) setError(bootError)
@@ -52,7 +59,7 @@ export function LoginPage() {
     return () => {
       cancelled = true
     }
-  }, [navigate])
+  }, [navigate, setToken])
 
   useEffect(() => {
     let cancelled = false
@@ -69,13 +76,6 @@ export function LoginPage() {
   useEffect(() => {
     if (token) navigate('/job', { replace: true })
   }, [token, navigate])
-
-  const exchangeFirebaseToken = async () => {
-    const idToken = await firebaseAuth.currentUser?.getIdToken(true)
-    if (!idToken) throw new Error('Could not get Firebase session')
-    const { data } = await authApi.firebaseLogin(idToken)
-    setToken(data.access_token)
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

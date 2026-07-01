@@ -27,13 +27,13 @@ async function bootstrap() {
   try {
     const result = await getGoogleRedirectResult()
     const user = result?.user ?? firebaseAuth.currentUser
-    if (!user) return
+    if (user) {
+      const idToken = await user.getIdToken(true)
+      if (!idToken) throw new Error('Could not get Firebase session')
 
-    const idToken = await user.getIdToken(true)
-    if (!idToken) throw new Error('Could not get Firebase session')
-
-    const { data } = await authApi.firebaseLogin(idToken)
-    useAuthStore.getState().setToken(data.access_token)
+      const { data } = await authApi.firebaseLogin(idToken)
+      useAuthStore.getState().setToken(data.access_token)
+    }
   } catch (err) {
     setAuthBootError(formatFirebaseAuthError(err) || formatAuthError(err))
   }
