@@ -1,3 +1,6 @@
+// Firebase redirect capture must be the first import.
+import './lib/firebase'
+
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { ChakraProvider } from '@chakra-ui/react'
@@ -8,9 +11,6 @@ import { ThemeSync } from './components/ThemeSync'
 import { Toaster } from './components/ui/toaster'
 import { AuthBootstrap } from './components/AuthBootstrap'
 import './index.css'
-
-// Capture Firebase redirect result as early as possible.
-import './lib/firebase'
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -5,9 +5,10 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  onAuthStateChanged,
+  type User,
   type UserCredential,
 } from 'firebase/auth'
-import { isLocalDevHost } from './apiBase'
 import { useAuthStore } from '../store/authStore'
 
 const firebaseConfig = {
@@ -26,30 +27,63 @@ export const firebaseAuth = getAuth(firebaseApp)
 const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
 
-// Must run as soon as this module loads — before any other async work in bootstrap.
+// Must run as soon as this module loads — before any other async work.
 const redirectResultPromise = getRedirectResult(firebaseAuth)
+
+function waitForFirebaseUser(timeoutMs = 5000): Promise<User | null> {
+  if (firebaseAuth.currentUser) return Promise.resolve(firebaseAuth.currentUser)
+
+  return new Promise((resolve) => {
+    let unsub: (() => void) | undefined
+
+    const timer = window.setTimeout(() => {
+      unsub?.()
+      resolve(firebaseAuth.currentUser)
+    }, timeoutMs)
+
+    unsub = onAuthStateChanged(firebaseAuth, (user) => {
+      if (user) {
+        window.clearTimeout(timer)
+        unsub?.()
+        resolve(user)
+      }
+    })
+  })
+}
+
+function mayBeReturningFromOAuth(): boolean {
+  const ref = document.referrer
+  return ref.includes('accounts.google.com') || ref.includes('firebaseapp.com')
+}
 
 export function getGoogleRedirectResult(): Promise<UserCredential | null> {
   return redirectResultPromise.then(async (result) => {
     if (result?.user) return result
+
     await firebaseAuth.authStateReady()
-    const user = firebaseAuth.currentUser
-    return user ? ({ user } as UserCredential) : null
+    if (firebaseAuth.currentUser) {
+      return { user: firebaseAuth.currentUser } as UserCredential
+    }
+
+    // Static hosts (e.g. workers.dev) can finish auth slightly after getRedirectResult.
+    if (mayBeReturningFromOAuth()) {
+      const user = await waitForFirebaseUser(5000)
+      if (user) return { user } as UserCredential
+    }
+
+    return null
   })
 }
 
+/** Popup first (works on localhost and workers.dev). Redirect only if popup is blocked. */
 export async function signInWithGoogle(): Promise<UserCredential | null> {
-  if (!isLocalDevHost()) {
-    useAuthStore.getState().setToken(null)
-    await signInWithRedirect(firebaseAuth, googleProvider)
-    return null
-  }
-
   try {
     return await signInWithPopup(firebaseAuth, googleProvider)
   } catch (err) {
     const code = (err as { code?: string }).code
-    if (code === 'auth/popup-blocked') {
+    if (code === 'auth/popup-closed-by-user') throw err
+    if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
+      useAuthStore.getState().setToken(null)
       await signInWithRedirect(firebaseAuth, googleProvider)
       return null
     }

@@ -24,12 +24,14 @@ export async function initializeAuthSession(): Promise<AuthInitResult> {
   await waitForAuthHydration()
 
   let error: string | null = null
+  let justExchanged = false
 
   try {
     const result = await getGoogleRedirectResult()
     const user = result?.user ?? firebaseAuth.currentUser
     if (user) {
       await exchangeFirebaseSession()
+      justExchanged = true
     }
   } catch (err) {
     error = formatFirebaseAuthError(err) || formatAuthError(err)
@@ -37,7 +39,7 @@ export async function initializeAuthSession(): Promise<AuthInitResult> {
   }
 
   const token = useAuthStore.getState().token
-  if (token) {
+  if (token && !justExchanged) {
     try {
       await authApi.me()
     } catch {
