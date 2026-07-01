@@ -14,6 +14,7 @@ import { SkillGraphPage } from './pages/SkillGraphPage'
 import { SharedPage } from './pages/SharedPage'
 import { FitReportPage } from './pages/FitReportPage'
 import { LoginPage } from './pages/LoginPage'
+import { Flex, Spinner } from '@chakra-ui/react'
 import { useAuthStore, waitForAuthHydration } from './store/authStore'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -28,7 +29,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     void waitForAuthHydration().then(() => setReady(true))
   }, [])
 
-  if (!ready) return null
+  if (!ready) {
+    return (
+      <Flex minH="100vh" align="center" justify="center" bg="bg.canvas">
+        <Spinner size="lg" color="accent.default" />
+      </Flex>
+    )
+  }
   if (!token) return <Navigate to="/login" replace />
   return <>{children}</>
 }

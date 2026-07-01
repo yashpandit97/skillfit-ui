@@ -26,7 +26,10 @@ function getHealthCheckUrl(): string {
 export async function validateApiReachable(): Promise<string | null> {
   if (isLocalDevHost()) return null
   try {
-    const res = await fetch(getHealthCheckUrl(), { cache: 'no-store' })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+    const res = await fetch(getHealthCheckUrl(), { cache: 'no-store', signal: controller.signal })
+    clearTimeout(timeout)
     if (!res.ok) return `API at ${getApiBase()} returned ${res.status}. Check public/config.json and redeploy.`
     return null
   } catch {

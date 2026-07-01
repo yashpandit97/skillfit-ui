@@ -8,6 +8,7 @@ import {
   type UserCredential,
 } from 'firebase/auth'
 import { isLocalDevHost } from './apiBase'
+import { useAuthStore } from '../store/authStore'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? 'AIzaSyBn94u9sXhgbVuLp8pXlkcl5fDiqxJKQ0w',
@@ -39,6 +40,7 @@ export function getGoogleRedirectResult(): Promise<UserCredential | null> {
 
 export async function signInWithGoogle(): Promise<UserCredential | null> {
   if (!isLocalDevHost()) {
+    useAuthStore.getState().setToken(null)
     await signInWithRedirect(firebaseAuth, googleProvider)
     return null
   }

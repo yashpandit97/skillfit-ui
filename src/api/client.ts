@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { getApiBase, apiUrl, getWsBaseUrl } from '../lib/apiBase'
 import { isAuthEndpoint } from '../lib/authErrors'
+import { useAuthStore } from '../store/authStore'
 
 const api = axios.create({
   baseURL: getApiBase(),
@@ -12,14 +13,7 @@ export function syncApiClientBaseUrl(): void {
 }
 
 function getAuthToken(): string | null {
-  try {
-    const auth = localStorage.getItem('auth')
-    if (!auth) return null
-    const parsed = JSON.parse(auth) as { state?: { token?: string } }
-    return parsed?.state?.token ?? null
-  } catch {
-    return null
-  }
+  return useAuthStore.getState().token
 }
 
 api.interceptors.request.use((config) => {
@@ -36,7 +30,7 @@ api.interceptors.response.use(
     const onLoginPage = window.location.pathname === '/login'
 
     if (status === 401 && !isAuthEndpoint(requestUrl) && !onLoginPage) {
-      localStorage.removeItem('auth')
+      useAuthStore.getState().logout()
       window.location.href = '/login'
     }
     return Promise.reject(e)

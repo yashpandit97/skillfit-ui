@@ -4,10 +4,10 @@ import { Flex, Heading, Text, Link as ChakraLink, Box } from '@chakra-ui/react'
 import { HiLockClosed, HiMail, HiLogin } from 'react-icons/hi'
 import { FcGoogle } from 'react-icons/fc'
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth'
-import { authApi } from '../api/client'
 import { firebaseAuth, signInWithGoogle, formatFirebaseAuthError } from '../lib/firebase'
+import { exchangeFirebaseSession } from '../lib/authSession'
 import { formatAuthError } from '../lib/authErrors'
-import { consumeAuthBootError, useAuthStore, waitForAuthHydration } from '../store/authStore'
+import { consumeAuthBootError, useAuthStore } from '../store/authStore'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { FormField, FormInput } from '../components/ui/FormField'
@@ -21,57 +21,12 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const token = useAuthStore((s) => s.token)
-  const setToken = useAuthStore((s) => s.setToken)
   const navigate = useNavigate()
-
-  const exchangeFirebaseToken = async () => {
-    const idToken = await firebaseAuth.currentUser?.getIdToken(true)
-    if (!idToken) throw new Error('Could not get Firebase session')
-    const { data } = await authApi.firebaseLogin(idToken)
-    setToken(data.access_token)
-  }
 
   useEffect(() => {
     const bootError = consumeAuthBootError()
     if (bootError) setError(bootError)
   }, [])
-
-  // Recovery: Firebase signed in but app JWT missing (e.g. API failed during bootstrap).
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      await waitForAuthHydration()
-      if (cancelled || useAuthStore.getState().token) return
-      await firebaseAuth.authStateReady()
-      if (cancelled || !firebaseAuth.currentUser) return
-      setLoading(true)
-      try {
-        await exchangeFirebaseToken()
-        if (!cancelled) navigate('/job', { replace: true })
-      } catch (err: unknown) {
-        if (!cancelled) {
-          setError(formatFirebaseAuthError(err) || formatAuthError(err))
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [navigate, setToken])
-
-  useEffect(() => {
-    let cancelled = false
-    void waitForAuthHydration().then(() => {
-      if (!cancelled && useAuthStore.getState().token) {
-        navigate('/job', { replace: true })
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [navigate])
 
   useEffect(() => {
     if (token) navigate('/job', { replace: true })
@@ -95,7 +50,7 @@ export function LoginPage() {
       } else {
         await signInWithEmailAndPassword(firebaseAuth, email.trim(), password)
       }
-      await exchangeFirebaseToken()
+      await exchangeFirebaseSession()
       toaster.create({
         title: mode === 'signup' ? 'Account created' : 'Welcome back',
         type: 'success',
@@ -123,7 +78,7 @@ export function LoginPage() {
     try {
       const result = await signInWithGoogle()
       if (!result) return // redirect flow — page navigates away
-      await exchangeFirebaseToken()
+      await exchangeFirebaseSession()
       toaster.create({ title: 'Welcome back', type: 'success' })
       navigate('/job')
     } catch (err: unknown) {
