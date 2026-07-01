@@ -29,6 +29,31 @@ export function LoginPage() {
     if (bootError) setError(bootError)
   }, [])
 
+  // Recovery: Firebase signed in but app JWT missing (e.g. API failed during bootstrap).
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      await waitForAuthHydration()
+      if (cancelled || useAuthStore.getState().token) return
+      await firebaseAuth.authStateReady()
+      if (cancelled || !firebaseAuth.currentUser) return
+      setLoading(true)
+      try {
+        await exchangeFirebaseToken()
+        if (!cancelled) navigate('/job', { replace: true })
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setError(formatFirebaseAuthError(err) || formatAuthError(err))
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [navigate])
+
   useEffect(() => {
     let cancelled = false
     void waitForAuthHydration().then(() => {

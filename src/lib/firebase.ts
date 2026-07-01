@@ -25,15 +25,20 @@ export const firebaseAuth = getAuth(firebaseApp)
 const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
 
-let redirectResultPromise: Promise<UserCredential | null> | null = null
+// Must run as soon as this module loads — before any other async work in bootstrap.
+const redirectResultPromise = getRedirectResult(firebaseAuth)
 
-/**
- * Local dev: popup (Vite has no COOP headers). Hosted: redirect (Cloudflare COOP blocks popup polling).
- * Returns null when a redirect was started (page will navigate away).
- */
+export function getGoogleRedirectResult(): Promise<UserCredential | null> {
+  return redirectResultPromise.then(async (result) => {
+    if (result?.user) return result
+    await firebaseAuth.authStateReady()
+    const user = firebaseAuth.currentUser
+    return user ? ({ user } as UserCredential) : null
+  })
+}
+
 export async function signInWithGoogle(): Promise<UserCredential | null> {
   if (!isLocalDevHost()) {
-    redirectResultPromise = null
     await signInWithRedirect(firebaseAuth, googleProvider)
     return null
   }
@@ -43,7 +48,6 @@ export async function signInWithGoogle(): Promise<UserCredential | null> {
   } catch (err) {
     const code = (err as { code?: string }).code
     if (code === 'auth/popup-blocked') {
-      redirectResultPromise = null
       await signInWithRedirect(firebaseAuth, googleProvider)
       return null
     }
@@ -51,19 +55,9 @@ export async function signInWithGoogle(): Promise<UserCredential | null> {
   }
 }
 
-/** Call once on page load after signInWithRedirect. Must run before persisted auth rehydration overwrites in-memory state. */
+/** @deprecated Use getGoogleRedirectResult() */
 export async function completeGoogleRedirect(): Promise<UserCredential | null> {
-  if (!redirectResultPromise) {
-    redirectResultPromise = getRedirectResult(firebaseAuth)
-  }
-  const result = await redirectResultPromise
-  if (result?.user) return result
-
-  await firebaseAuth.authStateReady()
-  const user = firebaseAuth.currentUser
-  if (!user) return null
-
-  return { user } as UserCredential
+  return getGoogleRedirectResult()
 }
 
 const FIREBASE_AUTH_ERRORS: Record<string, string> = {
