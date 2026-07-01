@@ -1,3 +1,4 @@
 {
-  "apiBaseUrl": "https://your-backend.example.com/api"
+  "apiBaseUrl": "https://your-backend.example.com/api",
+  "_comment": "For Cloudflare Pages: run `cloudflared tunnel --url http://localhost:8000`, paste the https URL here (with /api suffix), rebuild, and redeploy. Quick tunnels expire when cloudflared stops."
 }

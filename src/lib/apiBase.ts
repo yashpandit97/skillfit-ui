@@ -5,9 +5,33 @@ export function getApiBase(): string {
   return apiBase
 }
 
-function isLocalDevHost(): boolean {
+export function isLocalDevHost(): boolean {
   const host = window.location.hostname
   return host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
+}
+
+function getHealthCheckUrl(): string {
+  const base = getApiBase()
+  if (base.startsWith('http')) {
+    const url = new URL(base)
+    url.pathname = '/health'
+    url.search = ''
+    url.hash = ''
+    return url.toString()
+  }
+  return '/health'
+}
+
+/** Returns a user-facing message when the configured API is unreachable (hosted deploys). */
+export async function validateApiReachable(): Promise<string | null> {
+  if (isLocalDevHost()) return null
+  try {
+    const res = await fetch(getHealthCheckUrl(), { cache: 'no-store' })
+    if (!res.ok) return `API at ${getApiBase()} returned ${res.status}. Check public/config.json and redeploy.`
+    return null
+  } catch {
+    return `Cannot reach the API at ${getApiBase()}. Start your backend tunnel, update public/config.json, then redeploy the UI.`
+  }
 }
 
 export async function loadApiConfig(): Promise<void> {

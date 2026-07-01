@@ -6,7 +6,7 @@ import App from './App'
 import { system } from './theme'
 import { ThemeSync } from './components/ThemeSync'
 import { Toaster } from './components/ui/toaster'
-import { loadApiConfig } from './lib/apiBase'
+import { loadApiConfig, validateApiReachable } from './lib/apiBase'
 import { authApi, syncApiClientBaseUrl } from './api/client'
 import { completeGoogleRedirect, formatFirebaseAuthError } from './lib/firebase'
 import { formatAuthError } from './lib/authErrors'
@@ -34,10 +34,15 @@ async function bootstrap() {
   await loadApiConfig()
   syncApiClientBaseUrl()
 
-  try {
-    await completeGoogleRedirectLogin()
-  } catch (err) {
-    setAuthBootError(formatFirebaseAuthError(err) || formatAuthError(err))
+  const apiError = await validateApiReachable()
+  if (apiError) {
+    setAuthBootError(apiError)
+  } else {
+    try {
+      await completeGoogleRedirectLogin()
+    } catch (err) {
+      setAuthBootError(formatFirebaseAuthError(err) || formatAuthError(err))
+    }
   }
 
   ReactDOM.createRoot(document.getElementById('root')!).render(

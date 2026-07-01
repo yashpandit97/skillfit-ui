@@ -7,6 +7,7 @@ import {
   getRedirectResult,
   type UserCredential,
 } from 'firebase/auth'
+import { isLocalDevHost } from './apiBase'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? 'AIzaSyBn94u9sXhgbVuLp8pXlkcl5fDiqxJKQ0w',
@@ -27,10 +28,16 @@ googleProvider.setCustomParameters({ prompt: 'select_account' })
 let redirectResultPromise: Promise<UserCredential | null> | null = null
 
 /**
- * Prefer popup (works reliably on workers.dev). Fall back to redirect if the popup is blocked.
+ * Local dev: popup (Vite has no COOP headers). Hosted: redirect (Cloudflare COOP blocks popup polling).
  * Returns null when a redirect was started (page will navigate away).
  */
 export async function signInWithGoogle(): Promise<UserCredential | null> {
+  if (!isLocalDevHost()) {
+    redirectResultPromise = null
+    await signInWithRedirect(firebaseAuth, googleProvider)
+    return null
+  }
+
   try {
     return await signInWithPopup(firebaseAuth, googleProvider)
   } catch (err) {
