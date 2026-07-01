@@ -51,13 +51,19 @@ export async function signInWithGoogle(): Promise<UserCredential | null> {
   }
 }
 
-/** Call once after returning from signInWithRedirect. Must await authStateReady first. */
+/** Call once on page load after signInWithRedirect. Must run before persisted auth rehydration overwrites in-memory state. */
 export async function completeGoogleRedirect(): Promise<UserCredential | null> {
-  await firebaseAuth.authStateReady()
   if (!redirectResultPromise) {
     redirectResultPromise = getRedirectResult(firebaseAuth)
   }
-  return redirectResultPromise
+  const result = await redirectResultPromise
+  if (result?.user) return result
+
+  await firebaseAuth.authStateReady()
+  const user = firebaseAuth.currentUser
+  if (!user) return null
+
+  return { user } as UserCredential
 }
 
 const FIREBASE_AUTH_ERRORS: Record<string, string> = {

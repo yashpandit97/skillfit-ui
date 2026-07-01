@@ -7,7 +7,7 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'fire
 import { authApi } from '../api/client'
 import { firebaseAuth, signInWithGoogle, formatFirebaseAuthError } from '../lib/firebase'
 import { formatAuthError } from '../lib/authErrors'
-import { consumeAuthBootError, useAuthStore } from '../store/authStore'
+import { consumeAuthBootError, useAuthStore, waitForAuthHydration } from '../store/authStore'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { FormField, FormInput } from '../components/ui/FormField'
@@ -28,6 +28,18 @@ export function LoginPage() {
     const bootError = consumeAuthBootError()
     if (bootError) setError(bootError)
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void waitForAuthHydration().then(() => {
+      if (!cancelled && useAuthStore.getState().token) {
+        navigate('/job', { replace: true })
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [navigate])
 
   useEffect(() => {
     if (token) navigate('/job', { replace: true })
